@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Grit Chamber Twin</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Inter:wght@400;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0b0e14;
+            --panel-bg: rgba(16, 20, 28, 0.95);
+            --accent: #00e5ff;
+            --warn: #ffcc00;
+            --danger: #ff4444;
+            --text-main: #ffffff;
+            --font-head: 'Rajdhani', sans-serif;
+        }
+        body { margin: 0; overflow: hidden; background: var(--bg-dark); color: var(--text-main); font-family: 'Inter', sans-serif; }
+        
+        #ui-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: grid;
+            grid-template-columns: 360px 1fr 320px;
+            padding: 20px; box-sizing: border-box;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(12px);
+            padding: 20px; pointer-events: auto; border-radius: 6px;
+            display: flex; flex-direction: column; gap: 12px;
+            max-height: 95vh; overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+        }
+
+        h1 { font-family: var(--font-head); text-transform: uppercase; margin: 0; color: var(--accent); font-size: 1.8rem; letter-spacing: 1px; }
+        h2 { font-family: var(--font-head); font-size: 1.1rem; color: #888; border-bottom: 1px solid #333; padding-bottom: 5px; margin: 5px 0; }
+
+        .control-group { display: flex; flex-direction: column; gap: 6px; }
+        label { font-size: 0.8rem; color: #aaa; display: flex; justify-content: space-between; align-items: center; }
+        .val { font-family: 'Roboto Mono', monospace; color: var(--accent); font-weight: bold; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: var(--accent); height: 4px; background: #333; border-radius: 2px; }
+
+        .btn {
+            background: rgba(0, 229, 255, 0.1); border: 1px solid var(--accent); color: var(--accent);
+            padding: 12px; font-family: var(--font-head); font-weight: bold; cursor: pointer;
+            text-transform: uppercase; transition: all 0.2s; border-radius: 4px; font-size: 0.9rem;
+        }
+        .btn:hover { background: var(--accent); color: #000; box-shadow: 0 0 15px var(--accent); }
+        .btn.active { background: #00ff9d; border-color: #00ff9d; color: #000; }
+
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-family:'Roboto Mono'; font-size:0.8rem; }
+        .stat-item { background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px; }
+        .stat-item span { display: block; color: #666; font-size: 0.65rem; text-transform: uppercase; }
+        .stat-value { font-size: 1.0rem; color: #fff; }
+
+        .legend-row { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; color: #ccc; margin-top: 2px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 5px currentColor; }
+        
+        #canvas-container { position: absolute; width: 100%; height: 100%; z-index: -1; }
+    </style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<div id="ui-container">
+    <div class="panel">
+        <h1>Grit Chamber Twin</h1>
+        <p style="font-size: 0.75rem; color: #666; margin-top:-10px;">Industrial Process Simulator v2.0</p>
+
+        <h2>Hydraulic Parameters</h2>
+        
+        <div class="control-group">
+            <label>Channel Velocity (v) <span id="val-vel" class="val">0.30 m/s</span></label>
+            <input type="range" id="inp-vel" min="0.15" max="0.35" step="0.01" value="0.30">
+            <small style="color:#555; font-size:0.7rem;">Controls Flow Rate & Scour</small>
+        </div>
+
+        <div class="control-group">
+            <label>Detention Time (t) <span id="val-time" class="val">60 s</span></label>
+            <input type="range" id="inp-time" min="30" max="90" step="1" value="60">
+            <small style="color:#555; font-size:0.7rem;">Adjusts Chamber Length (L = v * t)</small>
+        </div>
+
+        <div class="control-group">
+            <label>Water Depth (h) <span id="val-depth" class="val">1.50 m</span></label>
+            <input type="range" id="inp-depth" min="0.9" max="1.5" step="0.05" value="1.5">
+        </div>
+
+        <div class="control-group">
+            <label>Turbulence / Air <span id="val-turb" class="val">15 %</span></label>
+            <input type="range" id="inp-turb" min="0" max="100" step="1" value="15">
+        </div>
+
+        <h2>Visualization</h2>
+        <button id="btn-xray" class="btn" onclick="app.toggleXRay()">Toggle X-Ray</button>
+        <button class="btn" onclick="app.runScraper()">Run Scraper Cycle</button>
+        
+        <div style="margin-top: 10px; border-top: 1px solid #333; padding-top:10px;">
+            <div class="legend-row"><div class="dot" style="background:#00e5ff; color:#00e5ff;"></div> Flow Velocity Vectors</div>
+            <div class="legend-row"><div class="dot" style="background:#ffffff; color:#ffffff;"></div> Silica Sand (Grit)</div>
+            <div class="legend-row"><div class="dot" style="background:#8b4513; color:#8b4513;"></div> Organic Matter</div>
+        </div>
+    </div>
+
+    <div></div>
+
+    <div class="panel">
+        <h2>Process Data</h2>
+        
+        <div class="stat-grid">
+            <div class="stat-item">
+                <span>Flow Rate (Q)</span>
+                <div class="stat-value" id="out-Q">--</div>
+            </div>
+            <div class="stat-item">
+                <span>Chamber Length</span>
+                <div class="stat-value" id="out-L">--</div>
+            </div>
+            <div class="stat-item">
+                <span>Reynolds No.</span>
+                <div class="stat-value" id="out-Re">--</div>
+            </div>
+            <div class="stat-item">
+                <span>Surface Overflow</span>
+                <div class="stat-value" id="out-SOR">--</div>
+            </div>
+        </div>
+
+        <div style="margin-top: 15px;">
+            <label>Removal Efficiency <span id="out-eff" class="val">0.0%</span></label>
+            <canvas id="chart-eff" height="120"></canvas>
+        </div>
+
+        <div style="margin-top: auto; border-top: 1px solid #444; padding-top: 10px;">
+            <label>Captured Mass <span id="out-mass" class="val">0 kg</span></label>
+            <label>Organic Washout <span id="out-org" class="val" style="color:#ffcc00">0.0%</span></label>
+        </div>
+        
+        <div id="status-msg" style="font-size:0.75rem; color:#00ff9d; text-align:center; padding:5px; border:1px dashed #333; border-radius:4px;">
+            SYSTEM OPTIMAL
+        </div>
+    </div>
+</div>
+
+<script>
+// --- PHYSICS CONSTANTS ---
+const RHO_WATER = 1000; // kg/m3
+const MU_WATER = 0.001; // Pa.s
+const G = 9.81;
+
+// --- GLSL SHADERS (Physically Responsive Water) ---
+const WATER_VERT = `
+    uniform float uTime;
+    uniform float uSpeed;      // Matches Channel Velocity
+    uniform float uTurbulence; // Matches Aeration
+    uniform float uSlope;
+    
+    varying vec2 vUv;
+    varying float vWaveHeight;
+
+    // Fast Pseudo-Random
+    float rand(vec2 co){ return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453); }
+    float noise(vec2 p) {
+        vec2 i = floor(p); vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(rand(i), rand(i + vec2(1.0, 0.0)), f.x),
+                   mix(rand(i + vec2(0.0, 1.0)), rand(i + vec2(1.0, 1.0)), f.x), f.y);
+    }
+
+    void main() {
+        vUv = uv;
+        vec3 pos = position;
+        
+        // 1. Hydraulic Slope (Energy Grade Line)
+        pos.y -= pos.z * uSlope; 
+
+        // 2. Velocity-Driven Ripples
+        // Frequency increases with velocity
+        float flowPhase = pos.z * 0.8 + uTime * uSpeed * 4.0;
+        float primaryWave = sin(flowPhase) * 0.05; 
+        
+        // 3. Turbulence Displacement
+        // Amplitude increases with turbulence slider
+        float turbNoise = noise(pos.xz * 3.0 + uTime * 2.0) * uTurbulence * 0.25;
+        
+        float totalDisp = primaryWave + turbNoise;
+        pos.y += totalDisp;
+        
+        vWaveHeight = totalDisp;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+    }
+`;
+
+const WATER_FRAG = `
+    uniform vec3 uColor;
+    uniform float uOpacity;
+    varying float vWaveHeight;
+
+    void main() {
+        // Dynamic Color: Deep blue in troughs, cyan/white on peaks (foam)
+        vec3 deep = uColor * 0.8;
+        vec3 shallow = uColor * 1.4;
+        
+        // Mix based on wave height
+        float mixFactor = smoothstep(-0.1, 0.1, vWaveHeight);
+        vec3 finalColor = mix(deep, shallow, mixFactor);
+        
+        // Fake Foam at high turbulence
+        if(vWaveHeight > 0.08) finalColor += 0.2;
+
+        gl_FragColor = vec4(finalColor, uOpacity);
+    }
+`;
+
+// --- PHYSICS ENGINE CLASS ---
+class HydraulicsEngine {
+    constructor() {
+        this.state = {
+            Q: 0,           // Flow Rate (m3/s)
+            L: 0,           // Effective Length (m)
+            Re: 0,          // Reynolds
+            SOR: 0,         // Surface Overflow Rate
+            slope: 0,       // Energy Slope
+            scour: false,   // Is velocity too high?
+            sedimentMap: new Float32Array(50).fill(0) // Bed height map
+        };
+    }
+
+    // Re-calculate all macro variables based on inputs
+    computeGlobal(params) {
+        const { velocity, time, depth, width } = params;
+        
+        // 1. Continuity: L = v * t
+        this.state.L = velocity * time;
+        
+        // 2. Flow Rate: Q = v * A
+        const area = width * depth;
+        this.state.Q = area * velocity;
+        
+        // 3. Hydraulics
+        const perimeter = width + 2 * depth;
+        const Rh = area / perimeter; // Hydraulic Radius
+        const rho = RHO_WATER;
+        
+        // Reynolds
+        this.state.Re = (rho * velocity * Rh) / MU_WATER;
+        
+        // Slope (Manning's approx)
+        const n = 0.013; // Concrete
+        this.state.slope = Math.pow((velocity * n) / Math.pow(Rh, 0.66), 2);
+        
+        // SOR (m3/m2/day)
+        const surfaceArea = width * this.state.L;
+        this.state.SOR = (this.state.Q / surfaceArea) * 86400;
+
+        // Scour Check (Camp-Shields)
+        this.state.scour = velocity > 0.45;
+
+        return this.state;
+    }
+
+    // Solve Settling Velocity (Newton/Stokes hybrid)
+    solveSettlingVelocity(d, rho_p) {
+        // Initial Guess (Stokes)
+        let v = (G * Math.pow(d, 2) * (rho_p - RHO_WATER)) / (18 * MU_WATER);
+        v = Math.max(1e-6, Math.abs(v));
+
+        // Iterative refinement for Transitional Flow
+        for(let i=0; i<5; i++) {
+            const Re_p = (RHO_WATER * v * d) / MU_WATER;
+            // Schiller-Naumann Drag
+            let Cd = (Re_p < 0.1) ? 24/Re_p : (24/Re_p)*(1 + 0.15*Math.pow(Re_p, 0.687));
+            if(Re_p > 1000) Cd = 0.44;
+            
+            // Recalc V
+            const v_new = Math.sqrt((4 * G * d * (rho_p - RHO_WATER)) / (3 * RHO_WATER * Cd));
+            v = v * 0.6 + v_new * 0.4; // Relaxation
+        }
+        return v;
+    }
+
+    // Get Vector at (x,y,z) accounting for turbulence and bed
+    getLocalVelocity(x, y, z, params) {
+        // Map Z to array index for bed collision
+        // Z ranges from -L/2 to L/2
+        const L = this.state.L;
+        const normZ = (z + L/2) / L; // 0 to 1
+        const gridIdx = Math.floor(normZ * 50);
+        const bedH = (gridIdx >= 0 && gridIdx < 50) ? this.state.sedimentMap[gridIdx] : 0;
+
+        if(y <= bedH) return { x:0, y:0, z:0 }; // Stuck in mud
+
+        // Main Velocity
+        let vz = params.velocity;
+        
+        // Continuity adjustment (flow speeds up over bed)
+        const effDepth = params.depth - bedH;
+        vz *= (params.depth / Math.max(0.1, effDepth));
+
+        // Turbulence Injection
+        const turbScale = params.turbulence * params.velocity * 0.5;
+        
+        return {
+            x: (Math.random()-0.5) * turbScale,
+            y: (Math.random()-0.5) * turbScale,
+            z: vz + (Math.random()-0.5) * turbScale * 0.5
+        };
+    }
+}
+
+// --- MAIN APPLICATION ---
+class GritTwin {
+    constructor() {
+        // UI Defaults
+        this.params = {
+            velocity: 0.30,
+            time: 60,
+            depth: 1.5,
+            width: 2.0,
+            turbulence: 0.15
+        };
+
+        this.physics = new HydraulicsEngine();
+        this.clock = new THREE.Clock();
+        this.stats = { captured: 0, totalGrit: 0, washout: 0, totalOrg: 0 };
+        this.isXRay = false;
+        
+        this.initThree();
+        this.initMaterials();
+        this.initSceneObjects();
+        this.initParticles(2500);
+        this.initVectors();
+        this.initChart();
+        this.bindUI();
+        
+        this.animate = this.animate.bind(this);
+        this.rebuildSystem(); // Initial build
+        this.animate();
+    }
+
+    initThree() {
+        this.container = document.getElementById('canvas-container');
+        this.scene = new THREE.Scene();
+        
+        // Camera setup for Process View (Angle looking down channel)
+        this.camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 500);
+        this.camera.position.set(12, 8, 15);
+        this.camera.lookAt(0, 0, 0);
+
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.container.appendChild(this.renderer.domElement);
+
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+        this.controls.target.set(0, 0.5, 0);
+
+        // Lights
+        const amb = new THREE.AmbientLight(0xffffff, 0.3);
+        const dir = new THREE.DirectionalLight(0xffffff, 1);
+        dir.position.set(5, 10, 5);
+        this.scene.add(amb, dir);
+    }
+
+    initMaterials() {
+        this.matConcrete = new THREE.MeshStandardMaterial({
+            color: 0x444444, roughness: 0.8, side: THREE.DoubleSide,
+            transparent: true, opacity: 1.0
+        });
+
+        this.waterUniforms = {
+            uTime: { value: 0 },
+            uSpeed: { value: 0.3 },
+            uTurbulence: { value: 0.15 },
+            uSlope: { value: 0.0 },
+            uColor: { value: new THREE.Color(0x00e5ff) },
+            uOpacity: { value: 0.8 }
+        };
+
+        this.matWater = new THREE.ShaderMaterial({
+            uniforms: this.waterUniforms,
+            vertexShader: WATER_VERT,
+            fragmentShader: WATER_FRAG,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+    }
+
+    initSceneObjects() {
+        this.tankGroup = new THREE.Group();
+        this.scene.add(this.tankGroup);
+        
+        // Rake
+        this.rake = new THREE.Mesh(new THREE.BoxGeometry(1, 0.4, 0.2), new THREE.MeshStandardMaterial({color:0xffaa00}));
+        this.rake.visible = false;
+        this.scene.add(this.rake);
+        this.rakeState = { active: false, z: 0 };
+    }
+
+    // Dynamic Rebuild based on Parameters
+    rebuildSystem() {
+        // 1. Physics Calc
+        const hydro = this.physics.computeGlobal(this.params);
+        
+        // 2. Geometry Rebuild
+        const L = hydro.L;
+        const W = this.params.width;
+        const H = this.params.depth;
+        const wallH = H + 0.5;
+
+        // Clear Old
+        while(this.tankGroup.children.length > 0) {
+            const obj = this.tankGroup.children[0];
+            if(obj.geometry) obj.geometry.dispose();
+            this.tankGroup.remove(obj);
+        }
+
+        // Floor
+        const floor = new THREE.Mesh(new THREE.BoxGeometry(W, 0.2, L), this.matConcrete);
+        floor.position.y = -0.1;
+        this.tankGroup.add(floor);
+
+        // Walls
+        const w1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, wallH, L), this.matConcrete);
+        w1.position.set(-W/2 - 0.1, wallH/2 - 0.1, 0);
+        const w2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, wallH, L), this.matConcrete);
+        w2.position.set(W/2 + 0.1, wallH/2 - 0.1, 0);
+        this.tankGroup.add(w1, w2);
+
+        // Water
+        const waterGeo = new THREE.PlaneGeometry(W, L, 20, Math.floor(L*2)); // LOD based on length
+        const water = new THREE.Mesh(waterGeo, this.matWater);
+        water.rotation.x = -Math.PI/2;
+        water.position.y = H; // Dynamic Height
+        this.tankGroup.add(water);
+
+        // Adjust Rake Width
+        this.rake.scale.x = W * 0.95;
+
+        // Update Camera Target if Length changes significantly
+        // this.controls.target.set(0, H/2, 0);
+    }
+
+    initParticles(count) {
+        const geo = new THREE.IcosahedronGeometry(0.03, 1);
+        const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        this.pMesh = new THREE.InstancedMesh(geo, mat, count);
+        this.pMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.scene.add(this.pMesh);
+
+        this.particles = [];
+        for(let i=0; i<count; i++) {
+            this.particles.push(this.spawnParticle(i));
+        }
+    }
+
+    spawnParticle(i) {
+        // Lognormal size dist
+        const r = Math.random();
+        const d_mm = 0.1 + (r*r)*2.0; // Bias small
+        const isGrit = Math.random() > 0.4;
+        const rho = isGrit ? 2650 : 1200;
+        
+        // Physics property pre-calc
+        const vs = this.physics.solveSettlingVelocity(d_mm/1000, rho);
+        const hydro = this.physics.state;
+        
+        return {
+            idx: i,
+            x: (Math.random()-0.5) * this.params.width,
+            y: Math.random() * this.params.depth,
+            z: (Math.random()-0.5) * hydro.L,
+            d: d_mm/1000,
+            rho: rho,
+            vs: vs,
+            type: isGrit ? 'GRIT' : 'ORG',
+            trapped: false
+        };
+    }
+
+    initVectors() {
+        const geo = new THREE.ConeGeometry(0.05, 0.2, 8);
+        geo.rotateX(Math.PI/2);
+        this.vecMesh = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({color:0x00e5ff}), 100);
+        this.vecMesh.visible = true; // Show by default
+        this.scene.add(this.vecMesh);
+    }
+
+    // --- MAIN PHYSICS LOOP ---
+    updateSim(dt) {
+        const hydro = this.physics.state;
+        const L = hydro.L;
+        const W = this.params.width;
+        const H = this.params.depth;
+
+        // 1. Update Shader Uniforms
+        this.waterUniforms.uTime.value += dt;
+        this.waterUniforms.uSpeed.value = this.params.velocity;
+        this.waterUniforms.uTurbulence.value = this.params.turbulence;
+        this.waterUniforms.uSlope.value = hydro.slope * 200; // Visual exaggerate
+
+        // 2. Particles
+        const dummy = new THREE.Object3D();
+        const colorGrit = new THREE.Color(0xffffff);
+        const colorOrg = new THREE.Color(0x8b4513);
+
+        this.particles.forEach(p => {
+            if(p.trapped) {
+                dummy.position.set(p.x, 0.05, p.z); // On floor
+                dummy.scale.set(1,1,1);
+            } else {
+                // Get Flow Vector
+                const v = this.physics.getLocalVelocity(p.x, p.y, p.z, this.params);
+                
+                // Advection
+                p.x += v.x * dt * 5.0; // Scaled for visual speed
+                p.y += v.y * dt * 5.0;
+                p.z += v.z * dt * 5.0;
+
+                // Settling
+                const v_settle = p.vs * (1.0 - this.params.turbulence); // Turbulence hinders settling
+                p.y -= v_settle * dt * 5.0;
+
+                // Floor Interaction
+                if(p.y <= 0) {
+                    p.y = 0;
+                    if(hydro.scour && p.type === 'GRIT') {
+                        p.y = 0.2; // Resuspend
+                    } else if (this.params.velocity < 0.2 && p.type === 'ORG') {
+                        p.trapped = true; // Organic settling (Bad)
+                    } else if (p.type === 'GRIT') {
+                        p.trapped = true; // Grit capture (Good)
+                        // Add to bed map
+                        const normZ = (p.z + L/2)/L;
+                        const idx = Math.floor(normZ*50);
+                        if(idx>=0 && idx<50) this.physics.state.sedimentMap[idx] += 0.002;
+                    } else {
+                        p.y = 0.05; // Organic bounces
+                    }
+                }
+
+                // Walls
+                if(Math.abs(p.x) > W/2) p.x *= 0.95;
+
+                // Loop
+                if(p.z > L/2) {
+                    // Stats
+                    if(p.trapped) { /* Already counted */ }
+                    else {
+                        if(p.type==='GRIT') this.stats.totalGrit++;
+                        else this.stats.washoutOrg++;
+                    }
+                    // Respawn
+                    Object.assign(p, this.spawnParticle(p.idx));
+                    p.z = -L/2;
+                }
+
+                dummy.position.set(p.x, p.y, p.z);
+                dummy.scale.set(1,1,1);
+            }
+            
+            dummy.updateMatrix();
+            this.pMesh.setMatrixAt(p.idx, dummy.matrix);
+            this.pMesh.setColorAt(p.idx, p.type==='GRIT' ? colorGrit : colorOrg);
+        });
+
+        this.pMesh.instanceMatrix.needsUpdate = true;
+        this.pMesh.instanceColor.needsUpdate = true;
+
+        // 3. Vectors Update (LOD)
+        if(this.vecMesh.visible) {
+            let vIdx = 0;
+            for(let z=-L/2+1; z<L/2; z+=L/5) {
+                for(let y=0.5; y<H; y+=H/2) {
+                    for(let x=-W/4; x<=W/4; x+=W/2) {
+                        if(vIdx >= 100) break;
+                        const v = this.physics.getLocalVelocity(x,y,z, this.params);
+                        dummy.position.set(x,y,z);
+                        // Scale arrow by velocity
+                        const len = (v.z / 0.3) * 0.5;
+                        dummy.scale.set(len, len, len); 
+                        dummy.updateMatrix();
+                        this.vecMesh.setMatrixAt(vIdx++, dummy.matrix);
+                    }
+                }
+            }
+            this.vecMesh.instanceMatrix.needsUpdate = true;
+        }
+
+        // 4. Rake
+        if(this.rakeState.active) {
+            this.rake.visible = true;
+            this.rakeState.z += 0.1;
+            this.rake.position.set(0, 0.2, this.rakeState.z);
+            // Push trapped particles
+            this.particles.forEach(p => {
+                if(p.trapped && Math.abs(p.z - this.rakeState.z) < 0.5) {
+                    p.z = this.rakeState.z + 0.5;
+                }
+            });
+            if(this.rakeState.z > L/2) {
+                this.rakeState.active = false;
+                this.rake.visible = false;
+                // Count Stats
+                this.stats.captured += 5; // Fake mass increment
+                this.particles.forEach(p => { if(p.trapped) p.y = -10; }); // Hide
+                this.physics.state.sedimentMap.fill(0); // Clear bed
+            }
+        }
+    }
+
+    updateStats() {
+        const hydro = this.physics.state;
+        
+        // Dom Updates
+        document.getElementById('out-Q').innerText = (hydro.Q * 3600).toFixed(0) + " m³/h";
+        document.getElementById('out-L').innerText = hydro.L.toFixed(1) + " m";
+        document.getElementById('out-Re').innerText = hydro.Re.toFixed(0);
+        document.getElementById('out-SOR').innerText = hydro.SOR.toFixed(0) + " m/d";
+        document.getElementById('out-mass').innerText = this.stats.captured + " kg";
+
+        // Chart Update
+        const totalGritOps = this.stats.captured + this.stats.totalGrit + 1; // avoid div0
+        const eff = (this.stats.captured / totalGritOps) * 100;
+        document.getElementById('out-eff').innerText = eff.toFixed(1) + "%";
+
+        // Status Logic
+        const statusEl = document.getElementById('status-msg');
+        if(hydro.scour) {
+            statusEl.innerText = "WARNING: SCOUR VELOCITY EXCEEDED";
+            statusEl.style.color = "#ff4444";
+            statusEl.style.borderColor = "#ff4444";
+        } else if (this.params.velocity < 0.2) {
+            statusEl.innerText = "WARNING: ORGANIC SETTLING";
+            statusEl.style.color = "#ffcc00";
+            statusEl.style.borderColor = "#ffcc00";
+        } else {
+            statusEl.innerText = "SYSTEM OPTIMAL";
+            statusEl.style.color = "#00ff9d";
+            statusEl.style.borderColor = "#00ff9d";
+        }
+
+        if(Math.random() < 0.05 && this.chart) {
+            this.chart.data.datasets[0].data.push(eff);
+            if(this.chart.data.datasets[0].data.length > 30) this.chart.data.datasets[0].data.shift();
+            this.chart.update('none');
+        }
+    }
+
+    // --- INTERACTION ---
+    bindUI() {
+        const bind = (id, param) => {
+            const el = document.getElementById(id);
+            el.addEventListener('input', (e) => {
+                let val = parseFloat(e.target.value);
+                
+                // Normalization
+                if(param === 'turbulence') this.params[param] = val / 100;
+                else this.params[param] = val;
+
+                // Update Label
+                const label = document.getElementById(id.replace('inp', 'val'));
+                const suffix = (param==='velocity')?' m/s':(param==='time')?' s':(param==='depth')?' m':' %';
+                label.innerText = val + suffix;
+
+                // Immediate Rebuilds
+                if(param === 'time' || param === 'depth' || param === 'velocity') {
+                    this.rebuildSystem();
+                }
+                
+                notifyParentOfParamsChange();
+            });
+        };
+
+        bind('inp-vel', 'velocity');
+        bind('inp-time', 'time');
+        bind('inp-depth', 'depth');
+        bind('inp-turb', 'turbulence');
+    }
+
+    toggleXRay() {
+        this.isXRay = !this.isXRay;
+        const btn = document.getElementById('btn-xray');
+        if(this.isXRay) {
+            this.matConcrete.opacity = 0.1;
+            this.waterUniforms.uOpacity.value = 0.2;
+            btn.classList.add('active');
+        } else {
+            this.matConcrete.opacity = 1.0;
+            this.waterUniforms.uOpacity.value = 0.8;
+            btn.classList.remove('active');
+        }
+    }
+
+    runScraper() {
+        this.rakeState.active = true;
+        this.rakeState.z = -this.physics.state.L/2;
+    }
+
+    initChart() {
+        const ctx = document.getElementById('chart-eff').getContext('2d');
+        this.chart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: Array(30).fill(''), datasets: [{ data: Array(30).fill(0), borderColor: '#00e5ff', borderWidth: 2, tension: 0.4, pointRadius: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, grid:{color:'#333'} }, x: { display: false } } }
+        });
+    }
+
+    animate() {
+        requestAnimationFrame(this.animate);
+        const dt = this.clock.getDelta();
+        
+        this.updateSim(dt);
+        this.updateStats();
+        
+        this.controls.update();
+        this.renderer.render(this.scene, this.camera);
+    }
+}
+
+// Start
+const app = new GritTwin();
+window.addEventListener('resize', () => {
+    app.camera.aspect = window.innerWidth / window.innerHeight;
+    app.camera.updateProjectionMatrix();
+    app.renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// --- BIDIRECTIONAL SYNC: Send parameter changes to parent window ---
+// This function notifies the parent component when parameters change in the simulator
+function notifyParentOfParamsChange() {
+    const params = {
+        velocity: parseFloat(document.getElementById('inp-vel').value),
+        time: parseFloat(document.getElementById('inp-time').value),
+        depth: parseFloat(document.getElementById('inp-depth').value),
+    };
+    
+    console.log('[v0] Grit simulator sending params to parent:', params);
+    
+    // Send postMessage to parent window with updated parameters
+    window.parent.postMessage({
+        type: 'PARAMS_CHANGED',
+        params: params
+    }, '*');
+}
+
+// --- BIDIRECTIONAL SYNC: Listen for parameter updates from parent window ---
+// This listener receives parameter updates when sliders change in the primary treatment page
+window.addEventListener('message', function(event) {
+    if (event.data.type === 'UPDATE_PARAMS') {
+        console.log('[v0] Grit simulator received params from parent:', event.data.params);
+        
+        const params = event.data.params;
+        
+        // Update the input sliders with new values
+        if (params.velocity !== undefined) {
+            const velInput = document.getElementById('inp-vel');
+            const velLabel = document.getElementById('val-vel');
+            velInput.value = params.velocity;
+            velLabel.innerText = params.velocity.toFixed(2) + ' m/s';
+        }
+        
+        if (params.time !== undefined) {
+            const timeInput = document.getElementById('inp-time');
+            const timeLabel = document.getElementById('val-time');
+            timeInput.value = params.time;
+            timeLabel.innerText = params.time.toFixed(0) + ' s';
+        }
+        
+        if (params.depth !== undefined) {
+            const depthInput = document.getElementById('inp-depth');
+            const depthLabel = document.getElementById('val-depth');
+            depthInput.value = params.depth;
+            depthLabel.innerText = params.depth.toFixed(2) + ' m';
+        }
+        
+        // Trigger system rebuild with new parameters
+        if (window.app && typeof window.app.rebuildSystem === 'function') {
+            window.app.params.velocity = params.velocity;
+            window.app.params.time = params.time;
+            window.app.params.depth = params.depth;
+            window.app.rebuildSystem();
+        }
+    }
+});
+</script>
+<button id="fullscreen-btn"
+  style="
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 9999;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid #00e5ff;
+    color: #00e5ff;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: 0.2s;
+  ">
+  ⛶ Fullscreen
+</button>
+<script>
+const fsBtn = document.getElementById("fullscreen-btn");
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+    fsBtn.textContent = "✖ Exit Fullscreen";
+  } else {
+    document.exitFullscreen();
+    fsBtn.textContent = "⛶ Fullscreen";
+  }
+}
+
+fsBtn.addEventListener("click", toggleFullscreen);
+
+// Optional: update button when exiting fullscreen via ESC
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement) {
+    fsBtn.textContent = "⛶ Fullscreen";
+  }
+});
+</script>
+</body>
+</html>

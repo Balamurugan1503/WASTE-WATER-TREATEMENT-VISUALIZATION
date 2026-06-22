@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radial Clarifier - Final Fixed</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Inter:wght@400;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root { --bg: #0b0e14; --panel: rgba(20, 25, 35, 0.95); --accent: #00d2ff; --warn: #ffaa00; }
+        body { margin: 0; overflow: hidden; background: var(--bg); color: #fff; font-family: 'Inter', sans-serif; }
+        
+        #ui-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: grid;
+            grid-template-columns: 340px 1fr 300px;
+            padding: 20px; box-sizing: border-box;
+        }
+
+        .panel {
+            background: var(--panel); border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(12px); padding: 20px; pointer-events: auto;
+            border-radius: 8px; display: flex; flex-direction: column; gap: 15px;
+            max-height: 95vh; overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+
+        h1 { font-family: 'Rajdhani'; margin: 0; color: var(--accent); font-size: 1.6rem; text-transform: uppercase; }
+        
+        .control-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-size: 0.8rem; color: #aaa; display: flex; justify-content: space-between; }
+        .val { font-family: 'Roboto Mono', monospace; color: var(--accent); font-weight: bold; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: var(--accent); }
+
+        .btn {
+            background: rgba(0, 210, 255, 0.1); border: 1px solid var(--accent); color: var(--accent);
+            padding: 12px; font-family: 'Rajdhani'; font-weight: bold; cursor: pointer;
+            text-transform: uppercase; transition: 0.2s; border-radius: 4px;
+        }
+        .btn:hover { background: var(--accent); color: #000; box-shadow: 0 0 15px var(--accent); }
+        .btn.active { background: #00ff9d; color: #000; border-color: #00ff9d; }
+
+        .legend-row { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; color: #ccc; margin-top: 5px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; }
+        
+        #canvas-container { position: absolute; width: 100%; height: 100%; z-index: -1; }
+    </style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<div id="ui-container">
+    <div class="panel">
+        <h1>Radial Clarifier</h1>
+        <p style="font-size: 0.75rem; color: #666; margin-top:-10px;">Full Floor Sedimentation & Rake Sweep</p>
+
+        <div class="control-group">
+            <label>Rake Speed <span id="val-rpm" class="val">2.0 RPM</span></label>
+            <input type="range" id="inp-rpm" min="0.5" max="8.0" step="0.5" value="2.0">
+        </div>
+
+        <div class="control-group">
+            <label>Water Depth <span id="val-depth" class="val">3.5 m</span></label>
+            <input type="range" id="inp-depth" min="2.0" max="6.0" step="0.1" value="3.5">
+            <small style="color:#666; font-size:0.7rem;">Tank walls remain static (6.5m)</small>
+        </div>
+        
+        <div class="control-group">
+            <label>Settling Rate <span id="val-prob" class="val">Low</span></label>
+            <input type="range" id="inp-prob" min="1" max="100" step="1" value="5">
+            <small style="color:#666; font-size:0.7rem;">Controls accumulation speed</small>
+        </div>
+
+        <h2>Operations</h2>
+        <button id="btn-xray" class="btn">Toggle Cross-Section</button>
+        <button id="btn-reset" class="btn">Clear Sludge Bed</button>
+        
+        <div style="margin-top: 15px; border-top:1px solid #333; padding-top:10px;">
+            <div class="legend-row"><div class="dot" style="background:#ffffff"></div> Suspended Solids</div>
+            <div class="legend-row"><div class="dot" style="background:#8b4513"></div> Settled Sludge (On Floor)</div>
+            <div class="legend-row"><div class="dot" style="background:#000000; border:1px solid #555"></div> Being Scraped</div>
+        </div>
+    </div>
+
+    <div></div>
+
+    <div class="panel">
+        <h2>Process State</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <div><span style="color:#888; font-size:0.7rem;">Inflow (Q)</span><br><span id="out-Q" style="font-family:'Roboto Mono'">-- m³/h</span></div>
+            <div><span style="color:#888; font-size:0.7rem;">Tip Speed</span><br><span id="out-tip" style="font-family:'Roboto Mono'">-- m/s</span></div>
+        </div>
+
+        <div style="margin-top: 10px;">
+            <label>Removal Efficiency <span id="out-eff" class="val">0.0%</span></label>
+            <canvas id="chart-eff" height="120"></canvas>
+        </div>
+
+        <div style="margin-top: auto; border-top: 1px solid #444; padding-top: 10px;">
+            <label>Sludge Accumulation <span id="out-mass" class="val">0 kg</span></label>
+        </div>
+    </div>
+</div>
+
+<script>
+// --- PHYSICS CONSTANTS ---
+const PHYS = {
+    RHO_W: 1000,
+    MU: 1.0e-3,
+    G: 9.81,
+    RADIUS: 10.0, // Fixed tank radius (20m diam)
+    MAX_WALL_H: 6.5
+};
+
+/**
+ * MODULE 1: FLUID & PARTICLE PHYSICS
+ */
+class HydraulicsEngine {
+    constructor() {
+        this.state = { Q: 0, SOR: 0, rakeAngle: 0, tipSpeed: 0 };
+    }
+
+    computeGlobal(params) {
+        const { depth, rpm } = params;
+        
+        // Fixed Residence Time assumption for visual flow calc (2.5h)
+        const residenceTime = 2.5; 
+        const volume = Math.PI * PHYS.RADIUS * PHYS.RADIUS * depth;
+        this.state.Q = volume / (residenceTime * 3600);
+
+        // Rake Physics
+        const omega = (rpm * 2 * Math.PI) / 60;
+        this.state.tipSpeed = omega * PHYS.RADIUS;
+
+        return this.state;
+    }
+
+    // Get velocity vector
+    getVelocityVector(r, y, params) {
+        if (y < 0) return { vr:0, vy:0 }; 
+        if (r > PHYS.RADIUS) return { vr:0, vy:0 }; 
+
+        const safeR = Math.max(0.5, r);
+        const ur = this.state.Q / (2 * Math.PI * safeR * params.depth);
+
+        let vy = 0;
+        if (r > PHYS.RADIUS * 0.85) {
+            vy = (this.state.Q / (Math.PI * (PHYS.RADIUS**2 - (PHYS.RADIUS*0.85)**2)));
+        }
+        return { vr: ur, vy: vy };
+    }
+
+    solveSettling(d, rho_p) {
+        // Simplified Stokes for stability
+        const v = (PHYS.G * Math.pow(d, 2) * (rho_p - PHYS.RHO_W)) / (18 * PHYS.MU);
+        return Math.max(1e-6, Math.abs(v));
+    }
+}
+
+/**
+ * MODULE 2: VISUALIZATION & SCENE
+ */
+class ClarifierApp {
+    constructor() {
+        this.params = { depth: 3.5, rpm: 2.0, settleProb: 5 };
+        this.physics = new HydraulicsEngine();
+        this.clock = new THREE.Clock();
+        this.stats = { captured: 0, total: 0, mass: 0 };
+        this.isXRay = false;
+
+        this.initThree();
+        this.initTankGeometry(); 
+        this.initDynamicGeometry(); 
+        this.initParticles(1500); // Optimized count
+        this.initChart(); // <--- This was the missing call
+        this.bindUI();
+        
+        // Initial Calculation
+        this.updateProcess(); 
+        
+        // Start Loop
+        this.animate = this.animate.bind(this);
+        this.animate();
+    }
+
+    initThree() {
+        this.container = document.getElementById('canvas-container');
+        this.scene = new THREE.Scene();
+        
+        // High angle view
+        this.camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 200);
+        this.camera.position.set(0, 25, 30);
+        this.camera.lookAt(0, 0, 0);
+
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.container.appendChild(this.renderer.domElement);
+
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+        this.controls.maxPolarAngle = Math.PI/2 - 0.1;
+
+        this.scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const dir = new THREE.DirectionalLight(0xffffff, 1);
+        dir.position.set(10, 20, 10);
+        this.scene.add(dir);
+    }
+
+    initTankGeometry() {
+        this.tankGroup = new THREE.Group();
+        this.scene.add(this.tankGroup);
+
+        this.matConcrete = new THREE.MeshStandardMaterial({ 
+            color: 0x444444, roughness: 0.9, side: THREE.DoubleSide, transparent:true, opacity:1 
+        });
+
+        // Floor
+        const floor = new THREE.Mesh(new THREE.CylinderGeometry(PHYS.RADIUS, PHYS.RADIUS, 0.5, 64), this.matConcrete);
+        floor.position.y = -0.25;
+        this.tankGroup.add(floor);
+
+        // Fixed Walls
+        const wallGeo = new THREE.CylinderGeometry(PHYS.RADIUS, PHYS.RADIUS, PHYS.MAX_WALL_H, 64, 1, true);
+        const wall = new THREE.Mesh(wallGeo, this.matConcrete);
+        wall.position.y = PHYS.MAX_WALL_H / 2;
+        this.tankGroup.add(wall);
+
+        // Center Column
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, PHYS.MAX_WALL_H+1, 32), this.matConcrete);
+        col.position.y = (PHYS.MAX_WALL_H+1)/2;
+        this.tankGroup.add(col);
+
+        // Launder
+        const weirGeo = new THREE.TorusGeometry(PHYS.RADIUS-0.5, 0.3, 8, 64);
+        const weir = new THREE.Mesh(weirGeo, this.matConcrete);
+        weir.rotation.x = Math.PI/2;
+        weir.position.y = PHYS.MAX_WALL_H - 0.5;
+        this.tankGroup.add(weir);
+    }
+
+    initDynamicGeometry() {
+        // Water
+        this.matWater = new THREE.MeshPhysicalMaterial({
+            color: 0x00d2ff, transmission: 0.9, opacity: 0.5, transparent: true, roughness: 0.1
+        });
+        this.waterMesh = new THREE.Mesh(new THREE.CylinderGeometry(PHYS.RADIUS-0.1, PHYS.RADIUS-0.1, 1, 64), this.matWater);
+        this.waterMesh.geometry.translate(0, 0.5, 0); 
+        this.scene.add(this.waterMesh);
+
+        // Rake Arm (Rotates)
+        this.rakeGroup = new THREE.Group();
+        const armGeo = new THREE.BoxGeometry(PHYS.RADIUS*1.9, 0.6, 0.2);
+        const armMat = new THREE.MeshStandardMaterial({ color: 0xffaa00 });
+        const arm = new THREE.Mesh(armGeo, armMat);
+        arm.position.y = 0.3;
+        this.rakeGroup.add(arm);
+        
+        // Add Scraper Blades
+        for(let r=2; r<PHYS.RADIUS; r+=1.0) {
+            const blade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.8), armMat);
+            blade.position.set(r, -0.2, 0.2);
+            blade.rotation.y = -0.5; 
+            arm.add(blade);
+            
+            const blade2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.8), armMat);
+            blade2.position.set(-r, -0.2, -0.2);
+            blade2.rotation.y = -0.5;
+            arm.add(blade2);
+        }
+
+        this.scene.add(this.rakeGroup);
+    }
+
+    initParticles(count) {
+        const geo = new THREE.IcosahedronGeometry(0.06, 0);
+        const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        this.pMesh = new THREE.InstancedMesh(geo, mat, count);
+        this.pMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.scene.add(this.pMesh);
+
+        this.particles = [];
+        for(let i=0; i<count; i++) {
+            this.particles.push(this.spawnParticle(i));
+        }
+    }
+
+    spawnParticle(i) {
+        const r = Math.sqrt(Math.random()) * (PHYS.RADIUS - 0.5); 
+        const theta = Math.random() * Math.PI * 2;
+        
+        const isGrit = Math.random() > 0.5; 
+        const d_mm = 0.05 + Math.random() * 2.0; 
+        const rho = isGrit ? 2650 : 1100;
+        
+        const vs = this.physics.solveSettling(d_mm/1000, rho);
+
+        return {
+            idx: i,
+            x: r * Math.cos(theta),
+            y: this.params.depth * 0.9,
+            z: r * Math.sin(theta),
+            d: d_mm/1000,
+            rho: rho,
+            vs: vs,
+            type: isGrit ? 'GRIT' : 'ORG',
+            state: 'SUSPENDED' 
+        };
+    }
+
+    updatePhysics(dt) {
+        // 1. Rake Rotation
+        const omega = (this.params.rpm * 2 * Math.PI) / 60;
+        this.physics.state.rakeAngle += omega * dt;
+        this.rakeGroup.rotation.y = -this.physics.state.rakeAngle;
+        
+        const curRakeAngle = (this.physics.state.rakeAngle % (2*Math.PI));
+
+        // 2. Water Level Animation
+        this.waterMesh.scale.y = THREE.MathUtils.lerp(this.waterMesh.scale.y, this.params.depth, 0.1);
+
+        const dummy = new THREE.Object3D();
+        const colSuspended = new THREE.Color(0xffffff);
+        const colSettled = new THREE.Color(0x8b4513); 
+        const colScraped = new THREE.Color(0x111111); 
+
+        this.particles.forEach(p => {
+            if(p.state === 'SETTLED') {
+                const r = Math.sqrt(p.x*p.x + p.z*p.z);
+                const theta = Math.atan2(p.z, p.x); 
+                const pAngle = theta < 0 ? theta + 2*Math.PI : theta;
+                
+                let diff1 = Math.abs(pAngle - (curRakeAngle % (2*Math.PI)));
+                let diff2 = Math.abs(pAngle - ((curRakeAngle + Math.PI) % (2*Math.PI)));
+                if(diff1 > Math.PI) diff1 = 2*Math.PI - diff1;
+                if(diff2 > Math.PI) diff2 = 2*Math.PI - diff2;
+
+                const sweepWidth = 0.2; 
+                let isBeingScraped = false;
+
+                if (diff1 < sweepWidth || diff2 < sweepWidth) {
+                    isBeingScraped = true;
+                    const push = 3.0 * dt; 
+                    p.x -= Math.cos(theta) * push;
+                    p.z -= Math.sin(theta) * push;
+                    p.y = 0.1 + Math.random() * 0.1;
+                } else {
+                    p.y = 0.05; 
+                }
+
+                if (r < 1.0) {
+                    p.state = 'SUSPENDED';
+                    p.y = -10; 
+                    this.stats.mass += (p.d * 100);
+                    setTimeout(() => Object.assign(p, this.spawnParticle(p.idx)), 100);
+                }
+
+                this.pMesh.setColorAt(p.idx, isBeingScraped ? colScraped : colSettled);
+                dummy.position.set(p.x, p.y, p.z);
+                dummy.scale.set(1,1,1);
+
+            } else {
+                const r = Math.sqrt(p.x*p.x + p.z*p.z);
+                const theta = Math.atan2(p.z, p.x);
+
+                const v = this.physics.getVelocityVector(r, p.y, this.params);
+                
+                const vr = v.vr * dt * 20.0;
+                p.x += Math.cos(theta) * vr;
+                p.z += Math.sin(theta) * vr;
+
+                p.y += (Math.random()-0.5)*0.05 + (v.vy - p.vs) * dt * 20.0;
+
+                if(p.y <= 0) {
+                    p.y = 0;
+                    const prob = this.params.settleProb / 100;
+                    if(Math.random() < prob) {
+                        p.state = 'SETTLED';
+                        this.stats.captured++;
+                    } else {
+                        p.y = 0.5 + Math.random()*0.5;
+                    }
+                }
+
+                if(r > PHYS.RADIUS && p.y > this.params.depth - 1.0) {
+                    this.stats.total++;
+                    Object.assign(p, this.spawnParticle(p.idx)); 
+                }
+
+                dummy.position.set(p.x, p.y, p.z);
+                dummy.scale.set(1,1,1);
+                this.pMesh.setColorAt(p.idx, colSuspended);
+            }
+            dummy.updateMatrix();
+            this.pMesh.setMatrixAt(p.idx, dummy.matrix);
+        });
+
+        this.pMesh.instanceMatrix.needsUpdate = true;
+        this.pMesh.instanceColor.needsUpdate = true;
+    }
+
+    updateStats() {
+        const state = this.physics.state;
+        document.getElementById('out-Q').innerText = (state.Q * 3600).toFixed(0) + " m³/h";
+        document.getElementById('out-tip').innerText = state.tipSpeed.toFixed(2) + " m/s";
+        document.getElementById('out-mass').innerText = Math.floor(this.stats.mass) + " kg";
+
+        const total = this.stats.captured + this.stats.total + 1;
+        const eff = (this.stats.captured / total) * 100;
+        document.getElementById('out-eff').innerText = eff.toFixed(1) + "%";
+
+        if(Math.random() < 0.05 && this.chart) {
+            this.chart.data.datasets[0].data.push(eff);
+            if(this.chart.data.datasets[0].data.length > 20) this.chart.data.datasets[0].data.shift();
+            this.chart.update('none');
+        }
+    }
+
+    updateProcess() {
+        this.physics.computeGlobal(this.params);
+    }
+
+    bindUI() {
+        const bind = (id, param, suffix='') => {
+            document.getElementById(id).addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                this.params[param] = val;
+                document.getElementById(id.replace('inp', 'val')).innerText = (param==='settleProb' ? val : val.toFixed(1)) + suffix;
+                this.updateProcess(); 
+            });
+        };
+        bind('inp-depth', 'depth', ' m');
+        bind('inp-rpm', 'rpm', ' RPM');
+        bind('inp-prob', 'settleProb', ' %');
+
+        document.getElementById('btn-xray').onclick = () => this.toggleXRay();
+        document.getElementById('btn-reset').onclick = () => this.resetSim();
+    }
+
+    toggleXRay() {
+        this.isXRay = !this.isXRay;
+        if(this.isXRay) {
+            this.matConcrete.opacity = 0.2;
+            this.matWater.opacity = 0.2;
+        } else {
+            this.matConcrete.opacity = 1.0;
+            this.matWater.opacity = 0.4;
+        }
+    }
+
+    resetSim() {
+        this.particles.forEach(p => Object.assign(p, this.spawnParticle(p.idx)));
+        this.stats.mass = 0;
+    }
+
+    // --- CHART INITIALIZATION ---
+    initChart() {
+        const ctx = document.getElementById('chart-eff').getContext('2d');
+        this.chart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: Array(20).fill(''), datasets: [{ data: Array(20).fill(0), borderColor: '#00d2ff', backgroundColor: 'rgba(0, 210, 255, 0.1)', fill: true, tension:0.3 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display:false } }, scales: { y: { min:0, max:100, grid:{color:'#333'} }, x:{display:false} } }
+        });
+    }
+
+    animate() {
+        requestAnimationFrame(this.animate);
+        const dt = this.clock.getDelta();
+        this.updatePhysics(dt);
+        this.updateStats();
+        this.controls.update();
+        this.renderer.render(this.scene, this.camera);
+    }
+}
+
+// Start immediately when DOM is ready
+window.onload = function() {
+    const app = new ClarifierApp();
+    window.addEventListener('resize', () => {
+        app.camera.aspect = window.innerWidth / window.innerHeight;
+        app.camera.updateProjectionMatrix();
+        app.renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WWTP Digital Twin - Complete Process Visualization</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', sans-serif; overflow: hidden; background: #0f172a; user-select: none; }
+#app { position: relative; width: 100vw; height: 100vh; }
+#canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+#labels-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+
+.header {
+  position: absolute; top: 24px; left: 30px; z-index: 50;
+  background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px);
+  padding: 20px 28px; border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(59, 130, 246, 0.3); pointer-events: none;
+}
+.header h1 { font-family: 'Rajdhani', sans-serif; color: #f1f5f9; font-size: 28px; font-weight: 800; line-height: 1; text-transform: uppercase; letter-spacing: 1px; }
+.header .subtitle { color: #94a3b8; font-size: 11px; margin-top: 8px; font-weight: 600; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
+.live-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2); animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.95); } }
+
+.camera-controls {
+  position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 6px; padding: 8px;
+  background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px);
+  border-radius: 50px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+  z-index: 50; pointer-events: auto; border: 1px solid rgba(59, 130, 246, 0.3);
+}
+.cam-btn {
+  background: transparent; border: none; color: #94a3b8; padding: 12px 24px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; cursor: pointer;
+  letter-spacing: 1px; font-family: 'Rajdhani', sans-serif;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 40px;
+}
+.cam-btn:hover { background: rgba(59, 130, 246, 0.1); color: #60a5fa; transform: translateY(-2px); }
+.cam-btn.active { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
+
+.scada-panel {
+  position: absolute; top: 24px; right: 24px; width: 380px; max-height: calc(100vh - 48px);
+  overflow-y: auto; z-index: 50; background: rgba(15, 23, 42, 0.98);
+  backdrop-filter: blur(16px); border: 1px solid rgba(59, 130, 246, 0.3);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4); border-radius: 16px;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s; pointer-events: auto;
+}
+.scada-panel.hidden { transform: translateX(450px); opacity: 0; pointer-events: none; }
+.scada-panel::-webkit-scrollbar { width: 6px; }
+.scada-panel::-webkit-scrollbar-track { background: rgba(30, 41, 59, 0.5); }
+.scada-panel::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.5); border-radius: 3px; }
+.panel-header { padding: 20px 24px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.1)); border-bottom: 1px solid rgba(59, 130, 246, 0.2); display: flex; justify-content: space-between; align-items: flex-start; }
+.panel-title { font-family: 'Rajdhani', sans-serif; color: #f1f5f9; font-size: 20px; font-weight: 800; letter-spacing: 0.5px; }
+.panel-id { font-size: 11px; color: #64748b; font-weight: 600; margin-top: 4px; letter-spacing: 1px; }
+.status-badge { background: linear-gradient(135deg, #22c55e, #16a34a); color: white; padding: 6px 12px; border-radius: 20px; font-size: 9px; font-weight: 700; letter-spacing: 1px; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3); }
+.status-badge.alarm { background: linear-gradient(135deg, #ef4444, #dc2626); animation: alarm-pulse 1s ease-in-out infinite; }
+@keyframes alarm-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+.panel-body { padding: 24px; }
+.panel-desc { color: #94a3b8; font-size: 13px; line-height: 1.6; margin-bottom: 24px; }
+.telemetry-section { margin-bottom: 24px; }
+.section-title { font-family: 'Rajdhani', sans-serif; font-size: 11px; color: #3b82f6; font-weight: 800; letter-spacing: 2px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.section-title::before { content: ''; width: 3px; height: 12px; background: linear-gradient(180deg, #3b82f6, #2563eb); border-radius: 2px; }
+.telemetry-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.metric-box { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 10px; padding: 14px; text-align: center; transition: all 0.3s; }
+.metric-box:hover { background: rgba(30, 41, 59, 0.8); border-color: rgba(59, 130, 246, 0.4); transform: translateY(-2px); }
+.metric-label { font-size: 9px; color: #64748b; font-weight: 700; letter-spacing: 1.5px; margin-bottom: 6px; text-transform: uppercase; }
+.metric-value { font-size: 22px; font-weight: 700; color: #f1f5f9; font-family: 'Rajdhani', monospace; letter-spacing: -0.5px; }
+.metric-value.alarm { color: #ef4444; animation: value-alarm 0.5s ease-in-out infinite; }
+@keyframes value-alarm { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+.chart-container { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 10px; padding: 16px; margin-top: 12px; }
+.chart-canvas { width: 100%; height: 120px; }
+.close-btn { width: 100%; background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid rgba(59, 130, 246, 0.3); color: #f1f5f9; padding: 14px; border-radius: 10px; font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 1px; cursor: pointer; transition: all 0.3s; text-transform: uppercase; }
+.close-btn:hover { background: linear-gradient(135deg, #3b82f6, #2563eb); border-color: #3b82f6; transform: translateY(-2px); box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3); }
+
+.unit-label { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 11px; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(8px); padding: 6px 14px; border-radius: 6px; color: #f1f5f9; pointer-events: auto; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); border: 1px solid rgba(59, 130, 246, 0.3); border-left: 3px solid #3b82f6; transition: all 0.3s; white-space: nowrap; }
+.unit-label:hover { transform: scale(1.1) translateY(-2px); border-left-color: #60a5fa; box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4); z-index: 1000; }
+.phase-label { font-family: 'Rajdhani', sans-serif; font-size: 24px; font-weight: 800; color: rgba(148, 163, 184, 0.2); pointer-events: none; text-transform: uppercase; letter-spacing: 6px; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+
+.minimap { position: absolute; top: 24px; right: 428px; width: 240px; height: 180px; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3); z-index: 50; overflow: hidden; pointer-events: auto; }
+.minimap-title { font-family: 'Rajdhani', sans-serif; font-size: 11px; font-weight: 800; color: #64748b; letter-spacing: 2px; padding: 10px 12px; background: rgba(30, 41, 59, 0.6); border-bottom: 1px solid rgba(59, 130, 246, 0.2); }
+.minimap-canvas { width: 100%; height: calc(100% - 36px); cursor: pointer; }
+
+.loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #0f172a, #1e293b); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.8s; }
+.loader h1 { font-family: 'Rajdhani', sans-serif; color: #f1f5f9; font-size: 32px; font-weight: 800; letter-spacing: 3px; margin-bottom: 16px; }
+.loader-text { color: #64748b; font-size: 13px; font-weight: 600; letter-spacing: 1px; }
+.loader-bar { width: 300px; height: 4px; background: rgba(59, 130, 246, 0.2); border-radius: 2px; margin-top: 24px; overflow: hidden; }
+.loader-progress { height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); width: 0%; transition: width 0.3s; box-shadow: 0 0 20px rgba(59, 130, 246, 0.6); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+// ========== Materials Manager ==========
+class MaterialsManager {
+  constructor() {
+    this.materials = {};
+    this.createMaterials();
+  }
+
+  createMaterials() {
+    this.materials.concrete = new THREE.MeshStandardMaterial({ color: 0xbfdbfe, roughness: 0.85, metalness: 0.1 });
+    this.materials.steelRed = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.4, metalness: 0.6 });
+    this.materials.steelGrey = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.5, metalness: 0.7 });
+    this.materials.steelBrown = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.6, metalness: 0.5 });
+    this.materials.safetyYellow = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.5, metalness: 0.3 });
+    this.materials.water = new THREE.MeshPhysicalMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.75, roughness: 0.1, metalness: 0.1, transmission: 0.6, ior: 1.33 });
+    this.materials.dirtyWater = new THREE.MeshPhysicalMaterial({ color: 0x64748b, transparent: true, opacity: 0.8, roughness: 0.3, metalness: 0.1 });
+    this.materials.pipeGlow = new THREE.MeshBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.8 });
+    this.materials.uvGlow = new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.9 });
+    this.materials.aopGlow = new THREE.MeshBasicMaterial({ color: 0x06b6d4, transparent: true, opacity: 0.85 });
+    
+    // NEW MATERIALS
+    this.materials.biogasFlame = new THREE.MeshBasicMaterial({ color: 0xff4500, transparent: true, opacity: 0.8 });
+    this.materials.sludgePipe = new THREE.MeshBasicMaterial({ color: 0x78350f, transparent: true, opacity: 0.9 }); // Dark Orange/Brown for sludge
+  }
+
+  get(name) { return this.materials[name] || this.materials.concrete; }
+}
+
+// ========== Telemetry AI ==========
+class TelemetryAI {
+  constructor() {
+    this.values = new Map();
+    this.history = new Map();
+    this.maxHistory = 50;
+  }
+
+  register(key, min, max, initial) {
+    this.values.set(key, { current: initial || (min + max) / 2, min, max, trend: 0 });
+    this.history.set(key, []);
+  }
+
+  next(key, min, max) {
+    if (!this.values.has(key)) { this.register(key, min, max); }
+    const data = this.values.get(key);
+    const range = max - min;
+    data.trend += (Math.random() - 0.5) * 0.1;
+    data.trend = Math.max(-0.5, Math.min(0.5, data.trend));
+    data.current += data.trend * range * 0.05;
+    data.current = Math.max(min, Math.min(max, data.current));
+    const hist = this.history.get(key);
+    hist.push(data.current);
+    if (hist.length > this.maxHistory) { hist.shift(); }
+    return data.current;
+  }
+
+  get(key) { return this.values.has(key) ? this.values.get(key).current : 0; }
+  getHistory(key) { return this.history.get(key) || []; }
+
+  generateScreeningTelemetry() { return { "Flow In": () => `${this.next('screening_flow', 1100, 1300).toFixed(0)} m³/h`, "Screen Status": () => "OPERATIONAL", "Debris Removed": () => `${this.next('screening_debris', 40, 60).toFixed(1)} kg/h`, "Uptime": () => "99.2%" }; }
+  generateGritTelemetry() { return { "Flow Rate": () => `${this.next('grit_flow', 1050, 1250).toFixed(0)} m³/h`, "Grit Removed": () => `${this.next('grit_removed', 30, 50).toFixed(1)} kg/h`, "Velocity": () => `${this.next('grit_velocity', 0.25, 0.35).toFixed(2)} m/s`, "Efficiency": () => `${this.next('grit_eff', 85, 95).toFixed(1)}%` }; }
+  generatePSTTelemetry() { return { "Flow In": () => `${this.next('pst_flow', 550, 650).toFixed(0)} m³/h`, "TSS Removal": () => `${this.next('pst_tss', 50, 65).toFixed(1)}%`, "Sludge Level": () => `${this.next('pst_sludge', 1.0, 2.0).toFixed(2)} m`, "Efficiency": () => `${this.next('pst_eff', 88, 96).toFixed(1)}%` }; }
+  generateDAFTelemetry() { return { "Flow Rate": () => `${this.next('daf_flow', 500, 600).toFixed(0)} m³/h`, "Air Pressure": () => `${this.next('daf_pressure', 4, 6).toFixed(1)} bar`, "Float Removal": () => `${this.next('daf_removal', 70, 85).toFixed(1)}%`, "Clarity": () => `${this.next('daf_clarity', 85, 95).toFixed(1)}%` }; }
+  generateAerationTelemetry() { return { "Flow In": () => `${this.next('aer_flow', 540, 620).toFixed(0)} m³/h`, "DO Level": () => `${this.next('aer_do', 1.8, 3.5).toFixed(2)} mg/L`, "MLSS": () => `${this.next('aer_mlss', 2800, 3800).toFixed(0)} mg/L`, "BOD Removal": () => `${this.next('aer_bod', 92, 97).toFixed(1)}%` }; }
+  generateBiofilterTelemetry() { return { "Flow Rate": () => `${this.next('bf_flow', 520, 600).toFixed(0)} m³/h`, "BOD Removal": () => `${this.next('bf_bod', 80, 92).toFixed(1)}%`, "Biofilm Depth": () => `${this.next('bf_biofilm', 1.5, 3.0).toFixed(1)} mm`, "Efficiency": () => `${this.next('bf_eff', 85, 94).toFixed(1)}%` }; }
+  generateMBRTelemetry() { return { "Flow Rate": () => `${this.next('mbr_flow', 500, 580).toFixed(0)} m³/h`, "TMP": () => `${this.next('mbr_tmp', 0.3, 0.8).toFixed(2)} bar`, "Permeability": () => `${this.next('mbr_perm', 200, 400).toFixed(0)} LMH/bar`, "Turbidity": () => `${this.next('mbr_turb', 0.1, 0.5).toFixed(2)} NTU` }; }
+  generateNutrientTelemetry() { return { "Flow Rate": () => `${this.next('nr_flow', 480, 560).toFixed(0)} m³/h`, "NO₃-N": () => `${this.next('nr_no3', 2, 8).toFixed(1)} mg/L`, "PO₄-P": () => `${this.next('nr_po4', 0.5, 2.0).toFixed(2)} mg/L`, "Removal": () => `${this.next('nr_removal', 85, 95).toFixed(1)}%` }; }
+  generateUVTelemetry() { return { "Flow In": () => `${this.next('uv_flow', 490, 570).toFixed(0)} m³/h`, "UV Dose": () => `${this.next('uv_dose', 35, 50).toFixed(1)} mJ/cm²`, "Lamp Status": () => "ALL ACTIVE", "E.coli Out": () => `<${Math.floor(this.next('uv_ecoli', 0, 5))} CFU/100mL` }; }
+  generateAOPTelemetry() { return { "Flow Rate": () => `${this.next('aop_flow', 480, 560).toFixed(0)} m³/h`, "H₂O₂ Dose": () => `${this.next('aop_h2o2', 5, 15).toFixed(1)} mg/L`, "OH Radical": () => `${this.next('aop_oh', 1.5, 3.5).toFixed(2)} µM`, "COD Removal": () => `${this.next('aop_cod', 75, 90).toFixed(1)}%` }; }
+
+  // NEW SLUDGE TELEMETRY
+  generateSludgeTelemetry() {
+    return {
+      "Digester Temp": () => `${this.next('dig_temp', 35, 38).toFixed(1)} °C`,
+      "Biogas Prod": () => `${this.next('dig_gas', 800, 1200).toFixed(0)} m³/d`,
+      "Solids Content": () => `${this.next('dig_solids', 3, 5).toFixed(1)} %`,
+      "Methane": () => `${this.next('dig_ch4', 60, 65).toFixed(1)} %`
+    };
+  }
+}
+
+// ========== Animation Manager ==========
+class AnimationManager {
+  constructor() { this.clock = new THREE.Clock(); }
+  getDelta() { return this.clock.getDelta(); }
+  getTime() { return this.clock.getElapsedTime(); }
+
+  update(units, time, delta) {
+    units.forEach(unit => {
+      unit.traverse((child) => {
+        const userData = child.userData;
+
+        if (userData.rotating) { child.rotation.y += userData.rotationSpeed * delta; }
+        if (userData.shimmer) { child.position.y = userData.baseY + Math.sin(time * 0.5 + child.position.x) * 0.08; }
+        if (userData.aerate) { child.position.y = userData.baseY + Math.sin(time * 1.5 + child.position.x) * 0.15; }
+        if (userData.uvGlow) { child.material.opacity = 0.7 + Math.sin(time * 4 + child.position.x) * 0.3; }
+        if (userData.aopGlow) { child.material.opacity = 0.75 + Math.sin(time * 3 + child.position.x * 0.5) * 0.25; child.scale.setScalar(1 + Math.sin(time * 2) * 0.05); }
+        if (userData.flowArrow) { child.position.y = child.userData.baseY + Math.sin(time * 2 + child.position.x) * 0.3; child.material.opacity = 0.4 + Math.sin(time * 3 + child.position.x) * 0.2; }
+        if (userData.flowPipe) { child.material.opacity = 0.6 + Math.sin(time * 3) * 0.2; }
+        
+        // NEW ANIMATION: Biogas Flare Pulse
+        if (userData.biogasFlame) {
+             child.scale.setScalar(1 + Math.sin(time * 5) * 0.1);
+             child.material.opacity = 0.6 + Math.sin(time * 8) * 0.3;
+        }
+      });
+    });
+  }
+}
+
+// ========== Flow System ==========
+class FlowSystem {
+  constructor(scene, materials) {
+    this.scene = scene;
+    this.materials = materials;
+    this.flowParticles = [];
+    this.waterPath = null;
+    this.sludgeParticles = []; // NEW
+    this.sludgePath = null;    // NEW
+  }
+
+  createWaterFlow(waypoints) {
+    this.waterPath = new THREE.CatmullRomCurve3(waypoints);
+    const pipeGeometry = new THREE.TubeGeometry(this.waterPath, 300, 1.2, 8, false);
+    const pipeMaterial = this.materials.get('pipeGlow').clone();
+    const pipe = new THREE.Mesh(pipeGeometry, pipeMaterial);
+    pipe.userData.flowPipe = true;
+    this.scene.add(pipe);
+
+    const particleGeometry = new THREE.SphereGeometry(0.6, 8, 8);
+    const particleMaterial = new THREE.MeshBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.9 });
+    for (let i = 0; i < 30; i++) {
+      const particle = new THREE.Mesh(particleGeometry, particleMaterial.clone());
+      particle.userData.progress = i / 30;
+      particle.userData.speed = 0.03 + Math.random() * 0.02;
+      this.scene.add(particle);
+      this.flowParticles.push(particle);
+    }
+    this.createFlowArrows(this.waterPath, 0x60a5fa);
+  }
+
+  // NEW METHOD
+  createSludgeFlow(waypoints) {
+    this.sludgePath = new THREE.CatmullRomCurve3(waypoints);
+    const pipeGeometry = new THREE.TubeGeometry(this.sludgePath, 150, 0.8, 8, false);
+    // Use the specific Sludge Pipe material
+    const pipeMaterial = this.materials.get('sludgePipe').clone();
+    const pipe = new THREE.Mesh(pipeGeometry, pipeMaterial);
+    pipe.userData.flowPipe = true; // Still animate opacity
+    this.scene.add(pipe);
+
+    // Brown particles
+    const particleGeometry = new THREE.SphereGeometry(0.5, 8, 8);
+    const particleMaterial = new THREE.MeshBasicMaterial({ color: 0x5d4037, transparent: true, opacity: 0.9 });
+    for (let i = 0; i < 20; i++) {
+      const particle = new THREE.Mesh(particleGeometry, particleMaterial.clone());
+      particle.userData.progress = i / 20;
+      particle.userData.speed = 0.02 + Math.random() * 0.01; // Slower than water
+      this.scene.add(particle);
+      this.sludgeParticles.push(particle);
+    }
+    this.createFlowArrows(this.sludgePath, 0x78350f);
+  }
+
+  createFlowArrows(path, color) {
+    const arrowGeometry = new THREE.ConeGeometry(0.5, 1.5, 3);
+    const arrowMaterial = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.6 });
+    const points = path.getPoints(50);
+    for (let i = 0; i < points.length; i += 5) {
+      const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial.clone());
+      arrow.position.copy(points[i]);
+      arrow.position.y += 3;
+      if (i < points.length - 1) {
+        const direction = new THREE.Vector3().subVectors(points[i + 1], points[i]).normalize();
+        arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+      }
+      arrow.userData.flowArrow = true;
+      arrow.userData.baseY = arrow.position.y;
+      this.scene.add(arrow);
+    }
+  }
+
+  update(time, delta) {
+    // Water
+    this.flowParticles.forEach(particle => {
+      particle.userData.progress += particle.userData.speed * delta;
+      if (particle.userData.progress > 1) { particle.userData.progress = 0; }
+      if (this.waterPath) {
+        const point = this.waterPath.getPointAt(particle.userData.progress);
+        particle.position.copy(point);
+        particle.material.opacity = 0.7 + Math.sin(time * 5 + particle.userData.progress * 10) * 0.3;
+      }
+    });
+
+    // Sludge (NEW)
+    this.sludgeParticles.forEach(particle => {
+        particle.userData.progress += particle.userData.speed * delta;
+        if (particle.userData.progress > 1) { particle.userData.progress = 0; }
+        if (this.sludgePath) {
+            const point = this.sludgePath.getPointAt(particle.userData.progress);
+            particle.position.copy(point);
+        }
+    });
+  }
+}
+
+// ========== Scene Manager ==========
+class SceneManager {
+  constructor() {
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x87ceeb);
+    this.scene.fog = new THREE.Fog(0x87ceeb, 100, 600);
+    this.setupTerrain();
+  }
+
+  setupTerrain() {
+    const groundGeometry = new THREE.PlaneGeometry(1000, 800);
+    const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x4d7c0f, roughness: 0.9 });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    this.scene.add(ground);
+
+    const riverGeometry = new THREE.PlaneGeometry(1000, 120);
+    const riverMaterial = new THREE.MeshPhysicalMaterial({ color: 0x1e40af, transparent: true, opacity: 0.7, roughness: 0.1 });
+    const river = new THREE.Mesh(riverGeometry, riverMaterial);
+    river.rotation.x = -Math.PI / 2;
+    river.position.set(0, 0.3, -200);
+    this.scene.add(river);
+  }
+}
+
+// ========== Unit Classes ==========
+class Screening {
+  constructor(materials, telemetry) { this.materials = materials; this.telemetry = telemetry; this.target = null; }
+  create() {
+    const group = new THREE.Group();
+    const building = new THREE.Mesh(new THREE.BoxGeometry(18, 10, 22), this.materials.get('concrete'));
+    building.position.y = 5; building.castShadow = true; group.add(building); this.target = building;
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(19, 1.5, 23), this.materials.get('steelRed'));
+    roof.position.y = 10.75; group.add(roof);
+    for (let i = 0; i < 5; i++) { const screen = new THREE.Mesh(new THREE.BoxGeometry(0.3, 6, 5), this.materials.get('steelGrey')); screen.position.set(-2 + i * 1, 3, 0); group.add(screen); }
+    group.userData = { id: "SCR-01", name: "Screening Building", type: "primary", desc: "Mechanical bar screens remove large debris, rags, and floating materials.", telemetry: this.telemetry.generateScreeningTelemetry() };
+    return group;
+  }
+}
+
+class GritChamber {
+  constructor(materials, telemetry) { this.materials = materials; this.telemetry = telemetry; this.target = null; }
+  create() {
+    const group = new THREE.Group();
+    const channel = new THREE.Mesh(new THREE.BoxGeometry(25, 4, 8), this.materials.get('concrete'));
+    channel.position.y = 2; channel.castShadow = true; group.add(channel); this.target = channel;
+    const water = new THREE.Mesh(new THREE.BoxGeometry(24, 3, 7), this.materials.get('dirtyWater'));
+    water.position.y = 2.5; water.userData.shimmer = true; water.userData.baseY = 2.5; group.add(water);
+    group.userData = { id: "GRT-01", name: "Grit Chamber", type: "primary", desc: "Aerated grit chamber removes sand, gravel, and heavy inorganic particles.", telemetry: this.telemetry.generateGritTelemetry() };
+    return group;
+  }
+}
+
+class PST {
+  constructor(materials, telemetry, id, name) { this.materials = materials; this.telemetry = telemetry; this.id = id; this.name = name; this.target = null; }
+  create() {
+    const group = new THREE.Group(); const radius = 12; const height = 5;
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(radius + 0.6, radius + 0.6, height, 64), this.materials.get('concrete'));
+    tank.position.y = height / 2; tank.castShadow = true; group.add(tank); this.target = tank;
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height - 0.5, 64), this.materials.get('dirtyWater'));
+    water.position.y = height / 2 + 0.3; water.userData.shimmer = true; water.userData.baseY = height / 2 + 0.3; group.add(water);
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(radius * 2.2, 0.6, 1.5), this.materials.get('steelBrown'));
+    bridge.position.y = height + 0.3; bridge.userData.rotating = true; bridge.userData.rotationSpeed = 0.05; group.add(bridge);
+    const column = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, height + 2, 16), this.materials.get('steelGrey'));
+    column.position.y = (height + 2) / 2; group.add(column);
+    group.userData = { id: this.id, name: this.name, type: "primary", desc: "Primary sedimentation tank.", telemetry: this.telemetry.generatePSTTelemetry() };
+    return group;
+  }
+}
+
+class Flotation {
+  constructor(materials, telemetry) { this.materials = materials; this.telemetry = telemetry; this.target = null; }
+  create() {
+    const group = new THREE.Group();
+    const tank = new THREE.Mesh(new THREE.BoxGeometry(20, 4, 12), this.materials.get('concrete'));
+    tank.position.y = 2; tank.castShadow = true; group.add(tank); this.target = tank;
+    const water = new THREE.Mesh(new THREE.BoxGeometry(19, 3, 11), this.materials.get('water'));
+    water.position.y = 2.5; group.add(water);
+    const skimmer = new THREE.Mesh(new THREE.BoxGeometry(18, 0.5, 2), this.materials.get('steelGrey'));
+    skimmer.position.set(0, 4.5, 0); group.add(skimmer);
+    group.userData = { id: "DAF-01", name: "Dissolved Air Flotation", type: "primary", desc: "DAF unit uses micro-bubbles to float suspended solids.", telemetry: this.telemetry.generateDAFTelemetry() };
+    return group;
+  }
+}
+
+class Aeration {
+  constructor(materials, telemetry, id, name) { this.materials = materials; this.telemetry = telemetry; this.id = id; this.name = name; this.target = null; }
+  create() {
+    const group = new THREE.Group(); const width = 32; const depth = 18; const height = 6;
+    const tank = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), this.materials.get('concrete'));
+    tank.position.y = height / 2; tank.castShadow = true; group.add(tank); this.target = tank;
+    const water = new THREE.Mesh(new THREE.BoxGeometry(width - 1, height - 1, depth - 1), this.materials.get('water'));
+    water.position.y = height / 2 + 0.3; water.userData.aerate = true; water.userData.baseY = height / 2 + 0.3; group.add(water);
+    for (let z = -depth / 2 + 3; z < depth / 2; z += 5) { const bridge = new THREE.Mesh(new THREE.BoxGeometry(width + 2, 0.6, 1.2), this.materials.get('steelGrey')); bridge.position.set(0, height + 0.3, z); group.add(bridge); }
+    group.userData = { id: this.id, name: this.name, type: "secondary", desc: "Activated sludge aeration basin.", telemetry: this.telemetry.generateAerationTelemetry() };
+    return group;
+  }
+}
+
+class BioFilter {
+  constructor(materials, telemetry) { this.materials = materials; this.telemetry = telemetry; this.target = null; }
+  create() {
+    const group = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(8, 10, 4, 32), this.materials.get('concrete'));
+    base.position.y = 2; base.castShadow = true; group.add(base);
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(7, 8, 20, 32), this.materials.get('steelRed'));
+    tower.position.y = 14; tower.castShadow = true; group.add(tower); this.target = tower;
+    const arm1 = new THREE.Mesh(new THREE.BoxGeometry(14, 0.6, 1), this.materials.get('steelGrey'));
+    arm1.position.y = 22; arm1.userData.rotating = true; arm1.userData.rotationSpeed = 0.3; group.add(arm1);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(7.5, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), this.materials.get('steelRed'));
+    dome.position.y = 24; group.add(dome);
+    group.userData = { id: "BF-01", name: "Trickling Filter", type: "secondary", desc: "Biological trickling filter tower.", telemetry: this.telemetry.generateBiofilterTelemetry() };
+    return group;
+  }
+}
+
+class MBR {
+  constructor(materials, telemetry) { this.materials = materials; this.telemetry = telemetry; this.target = null; }
+  create() {
+    const group = new THREE.Group();
+    const tank = new THREE.Mesh(new THREE.BoxGeometry(20, 8, 16), this.materials.get('concrete'));
+    tank.position.y = 4; tank.castShadow = true; group.add(tank); this.target = tank;
+    const water = new THREE.Mesh(new THREE.BoxGeometry(19, 7, 15), this.materials.get('water'));
+    water.position.y = 4.5; group.add(water);
+    for (let x = -6; x <= 6; x += 6) { for (let z = -4; z <= 4; z += 4) { const module = new THREE.Mesh(new THREE.BoxGeometry(4, 6, 3), this.materials.get('steelGrey')); module.position.set(x, 3, z); group.add(module); } }
+    group.userData = { id: "MBR-01", name: "Membrane Bioreactor", type: "tertiary", desc: "MBR combines biological treatment with membrane filtration.", telemetry: this.telemetry.generateMBRTelemetry() };
+    return group;
+  }
+}
+
+class NutrientRemoval {
+  constructor(materials, telemetry) { this.materials = materials; this.telemetry = telemetry; this.target = null; }
+  create() {
+    const group = new THREE.Group();
+    const tank = new THREE.Mesh(new THREE.BoxGeometry(16, 5, 12), this.materials.get('concrete'));
+    tank.position.y = 2.5; tank.castShadow = true; group.add(tank); this.target = tank;
+    const water = new THREE.Mesh(new THREE.BoxGeometry(15, 4, 11), this.materials.get('water'));
+    water.position.y = 3; group.add(water);
+    for (let x = -5; x <= 5; x += 10) { const mixer = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 4, 16), this.materials.get('steelGrey')); mixer.position.set(x, 3, 0); group.add(mixer); const blade = new THREE.Mesh(new THREE.BoxGeometry(3, 0.3, 1), this.materials.get('steelGrey')); blade.position.set(x, 1.5, 0); blade.userData.rotating = true; blade.userData.rotationSpeed = 2; group.add(blade); }
+    group.userData = { id: "NR-01", name: "Nutrient Removal", type: "tertiary", desc: "Anoxic denitrification.", telemetry: this.telemetry.generateNutrientTelemetry() };
+    return group;
+  }
+}
+
+class UVSystem {
+  constructor(materials, telemetry) { this.materials = materials; this.telemetry = telemetry; this.target = null; }
+  create() {
+    const group = new THREE.Group(); const length = 22;
+    const channel = new THREE.Mesh(new THREE.BoxGeometry(length, 3.5, 5), this.materials.get('concrete'));
+    channel.position.y = 1.75; channel.castShadow = true; group.add(channel); this.target = channel;
+    const water = new THREE.Mesh(new THREE.BoxGeometry(length, 2.5, 4), this.materials.get('water'));
+    water.position.y = 2.25; group.add(water);
+    for (let x = -length / 2 + 2; x < length / 2; x += 3) { const bank = new THREE.Mesh(new THREE.BoxGeometry(0.6, 4.5, 4.2), this.materials.get('steelGrey')); bank.position.set(x, 3.5, 0); group.add(bank); const glow = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.5, 3.5), this.materials.get('uvGlow')); glow.position.set(x, 2, 0); glow.userData.uvGlow = true; group.add(glow); }
+    group.userData = { id: "UV-01", name: "UV Disinfection", type: "tertiary", desc: "Ultraviolet disinfection.", telemetry: this.telemetry.generateUVTelemetry() };
+    return group;
+  }
+}
+
+class AOP {
+  constructor(materials, telemetry) { this.materials = materials; this.telemetry = telemetry; this.target = null; }
+  create() {
+    const group = new THREE.Group();
+    const reactor = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 12, 32), this.materials.get('steelGrey'));
+    reactor.position.y = 6; reactor.castShadow = true; group.add(reactor); this.target = reactor;
+    const chamber = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 10, 32), this.materials.get('aopGlow'));
+    chamber.position.y = 6; chamber.userData.aopGlow = true; group.add(chamber);
+    for (let i = 0; i < 8; i++) { const angle = (i / 8) * Math.PI * 2; const port = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 2, 8), this.materials.get('steelGrey')); port.position.set(Math.cos(angle) * 6.5, 6, Math.sin(angle) * 6.5); port.rotation.z = Math.PI / 2; port.rotation.y = angle; group.add(port); }
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(6, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), this.materials.get('steelGrey'));
+    dome.position.y = 12; group.add(dome);
+    group.userData = { id: "AOP-01", name: "Advanced Oxidation", type: "tertiary", desc: "Advanced Oxidation Process.", telemetry: this.telemetry.generateAOPTelemetry() };
+    return group;
+  }
+}
+
+// ========== NEW UNIT CLASSES (SLUDGE LINE) ==========
+
+class Thickener {
+  constructor(materials, telemetry) { this.materials = materials; this.telemetry = telemetry; this.target = null; }
+  create() {
+    const group = new THREE.Group();
+    const radius = 8; const height = 4;
+
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 32), this.materials.get('concrete'));
+    tank.position.y = height / 2; tank.castShadow = true; group.add(tank); this.target = tank;
+
+    // Darker water/sludge
+    const sludge = new THREE.Mesh(new THREE.CylinderGeometry(radius - 0.5, radius - 0.5, height - 0.5, 32), this.materials.get('dirtyWater'));
+    sludge.position.y = height / 2 + 0.2; group.add(sludge);
+
+    // Picket fence mechanism
+    const rake = new THREE.Mesh(new THREE.BoxGeometry(radius * 1.8, 2, 0.5), this.materials.get('steelGrey'));
+    rake.position.y = height / 2; 
+    rake.userData.rotating = true; rake.userData.rotationSpeed = 0.1; // Slow rotation
+    group.add(rake);
+
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(radius * 2.2, 0.5, 1.5), this.materials.get('steelBrown'));
+    bridge.position.y = height + 0.25; group.add(bridge);
+
+    group.userData = { id: "G-THK", name: "Gravity Thickener", type: "sludge", desc: "Concentrates solids before digestion.", telemetry: this.telemetry.generateSludgeTelemetry() };
+    return group;
+  }
+}
+
+class Digester {
+  constructor(materials, telemetry) { this.materials = materials; this.telemetry = telemetry; this.target = null; }
+  create() {
+    const group = new THREE.Group();
+    const radius = 10; const height = 15;
+
+    // Create 2 Digesters
+    for(let i=0; i<2; i++) {
+        const offset = i * 25; 
+        const tank = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 32), this.materials.get('concrete'));
+        tank.position.set(offset, height/2, 0); tank.castShadow = true; group.add(tank);
+        if(i===0) this.target = tank;
+
+        const dome = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), this.materials.get('steelGrey'));
+        dome.position.set(offset, height, 0); group.add(dome);
+    }
+
+    // Biogas Flare
+    const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 1, 10, 8), this.materials.get('steelGrey'));
+    stack.position.set(12.5, 5, 15); group.add(stack);
+    
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(2, 6, 8), this.materials.get('biogasFlame'));
+    flame.position.set(12.5, 11, 15);
+    flame.userData.biogasFlame = true; // For animation
+    group.add(flame);
+
+    group.userData = { id: "AD-01", name: "Anaerobic Digesters", type: "sludge", desc: "Biogas production and solids stabilization.", telemetry: this.telemetry.generateSludgeTelemetry() };
+    return group;
+  }
+}
+
+class DewateringBuilding {
+  constructor(materials, telemetry) { this.materials = materials; this.telemetry = telemetry; this.target = null; }
+  create() {
+    const group = new THREE.Group();
+    const building = new THREE.Mesh(new THREE.BoxGeometry(20, 8, 15), this.materials.get('steelGrey'));
+    building.position.y = 4; building.castShadow = true; group.add(building); this.target = building;
+    
+    // Windows/Details
+    const windowGeo = new THREE.BoxGeometry(1, 4, 0.1);
+    for(let i=-8; i<8; i+=4) {
+        const win = new THREE.Mesh(windowGeo, this.materials.get('uvGlow')); // Reuse glow for window effect
+        win.position.set(i, 4, 7.6); group.add(win);
+    }
+
+    group.userData = { id: "DW-01", name: "Dewatering Hall", type: "sludge", desc: "Belt press/Centrifuge area for final cake production.", telemetry: this.telemetry.generateSludgeTelemetry() };
+    return group;
+  }
+}
+
+
+// ========== SCADA Panel ==========
+class SCADAPanel {
+  constructor() {
+    this.panel = null; this.currentUnit = null; this.telemetry = null; this.updateInterval = null; this.createPanel();
+  }
+
+  createPanel() {
+    this.panel = document.createElement('div');
+    this.panel.className = 'scada-panel hidden';
+    this.panel.innerHTML = `
+      <div class="panel-header"><div><div class="panel-title" id="scada-title">UNIT NAME</div><div class="panel-id">ID: <span id="scada-id">--</span></div></div><div class="status-badge" id="scada-status">ACTIVE</div></div>
+      <div class="panel-body"><p class="panel-desc" id="scada-desc">Unit description...</p><div class="telemetry-section"><div class="section-title">LIVE TELEMETRY</div><div class="telemetry-grid" id="telemetry-grid"></div></div><div class="telemetry-section"><div class="section-title">TREND ANALYSIS</div><div class="chart-container"><canvas class="chart-canvas" id="trend-chart"></canvas></div></div><button class="close-btn" id="close-scada">CLOSE INSPECTION</button></div>`;
+    document.getElementById('app').appendChild(this.panel);
+    document.getElementById('close-scada').addEventListener('click', () => { this.hide(); window.dispatchEvent(new CustomEvent('scada-close')); });
+  }
+
+  show(unit, telemetry) {
+    this.currentUnit = unit; this.telemetry = telemetry; this.panel.classList.remove('hidden');
+    document.getElementById('scada-title').textContent = unit.userData.name;
+    document.getElementById('scada-id').textContent = unit.userData.id;
+    document.getElementById('scada-desc').textContent = unit.userData.desc;
+    this.updateTelemetry();
+    if (this.updateInterval) { clearInterval(this.updateInterval); }
+    this.updateInterval = setInterval(() => this.updateTelemetry(), 2000);
+  }
+
+  hide() { this.panel.classList.add('hidden'); if (this.updateInterval) { clearInterval(this.updateInterval); this.updateInterval = null; } }
+
+  updateTelemetry() {
+    if (!this.currentUnit || !this.telemetry) return;
+    const grid = document.getElementById('telemetry-grid'); grid.innerHTML = '';
+    const telemetryData = this.currentUnit.userData.telemetry;
+    if (!telemetryData) return;
+    Object.entries(telemetryData).forEach(([label, valueFn]) => {
+      const box = document.createElement('div'); box.className = 'metric-box'; const value = valueFn();
+      box.innerHTML = `<div class="metric-label">${label}</div><div class="metric-value">${value}</div>`;
+      grid.appendChild(box);
+    });
+    this.updateChart();
+  }
+
+  updateChart() {
+    const canvas = document.getElementById('trend-chart'); if (!canvas) return;
+    const ctx = canvas.getContext('2d'); const width = canvas.width = canvas.offsetWidth; const height = canvas.height = canvas.offsetHeight;
+    ctx.clearRect(0, 0, width, height); ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2; ctx.beginPath();
+    const points = 50; for (let i = 0; i < points; i++) { const x = (i / points) * width; const y = height / 2 + Math.sin(i * 0.2) * 20 + Math.random() * 10; if (i === 0) { ctx.moveTo(x, y); } else { ctx.lineTo(x, y); } } ctx.stroke();
+    ctx.strokeStyle = 'rgba(59, 130, 246, 0.2)'; ctx.lineWidth = 1; for (let i = 0; i < 5; i++) { const y = (i / 4) * height; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke(); }
+  }
+}
+
+// ========== Labels Manager ==========
+class LabelsManager {
+  constructor() { this.labels = []; }
+  createUnitLabel(unit, name, onClickCallback) {
+    const div = document.createElement('div'); div.className = 'unit-label'; div.textContent = name;
+    div.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (onClickCallback) { onClickCallback(unit); } });
+    const label = new CSS2DObject(div); label.position.set(0, 15, 0); unit.add(label); this.labels.push(label); return label;
+  }
+  createPhaseLabel(scene, text, x, z) {
+    const div = document.createElement('div'); div.className = 'phase-label'; div.textContent = text;
+    const label = new CSS2DObject(div); label.position.set(x, 0, z); scene.add(label); this.labels.push(label); return label;
+  }
+}
+
+// ========== Minimap ==========
+class MinimapManager {
+  constructor() { this.canvas = null; this.ctx = null; this.units = []; this.camera = null; this.controls = null; this.hoveredUnit = null; }
+  setup(units, camera, controls) {
+    this.units = units; this.camera = camera; this.controls = controls;
+    const container = document.createElement('div'); container.className = 'minimap';
+    const title = document.createElement('div'); title.className = 'minimap-title'; title.textContent = 'PLANT MAP'; container.appendChild(title);
+    this.canvas = document.createElement('canvas'); this.canvas.className = 'minimap-canvas'; this.canvas.width = 240; this.canvas.height = 144; container.appendChild(this.canvas);
+    document.getElementById('app').appendChild(container); this.ctx = this.canvas.getContext('2d');
+    this.canvas.addEventListener('click', (e) => this.onClick(e)); this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
+  }
+  onClick(e) { const rect = this.canvas.getBoundingClientRect(); const x = e.clientX - rect.left; const y = e.clientY - rect.top; const unit = this.getUnitAtPosition(x, y); if (unit) { window.dispatchEvent(new CustomEvent('unit-inspect', { detail: unit })); } }
+  onMouseMove(e) { const rect = this.canvas.getBoundingClientRect(); const x = e.clientX - rect.left; const y = e.clientY - rect.top; this.hoveredUnit = this.getUnitAtPosition(x, y); }
+  getUnitAtPosition(x, y) { for (const unit of this.units) { const mapPos = this.worldToMap(unit.position); const dist = Math.sqrt(Math.pow(x - mapPos.x, 2) + Math.pow(y - mapPos.y, 2)); if (dist < 8) { return unit; } } return null; }
+  worldToMap(worldPos) { const scale = 0.3; return { x: this.canvas.width / 2 + worldPos.x * scale, y: this.canvas.height / 2 + worldPos.z * scale }; }
+  update(camera) {
+    if (!this.ctx) return; const ctx = this.ctx; ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.units.forEach(unit => { const pos = this.worldToMap(unit.position); const isHovered = unit === this.hoveredUnit; ctx.fillStyle = isHovered ? '#60a5fa' : '#3b82f6'; ctx.strokeStyle = isHovered ? '#93c5fd' : '#2563eb'; ctx.lineWidth = isHovered ? 2 : 1; ctx.beginPath(); ctx.arc(pos.x, pos.y, isHovered ? 6 : 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); });
+    const camPos = this.worldToMap(camera.position); ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(camPos.x, camPos.y, 8, 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
+// ========== Plant Builder ==========
+class PlantBuilder {
+  constructor(scene, materials, labels, flowSystem, telemetry) {
+    this.scene = scene; this.materials = materials; this.labels = labels; this.flowSystem = flowSystem; this.telemetry = telemetry; this.units = []; this.interactables = [];
+  }
+
+  async build() {
+    // PRIMARY TREATMENT
+    this.addUnit(new Screening(this.materials, this.telemetry), -190, 0);
+    this.addUnit(new GritChamber(this.materials, this.telemetry), -160, 0);
+    this.addUnit(new PST(this.materials, this.telemetry, "PST-01", "Primary Clarifier 1"), -120, -25);
+    this.addUnit(new PST(this.materials, this.telemetry, "PST-02", "Primary Clarifier 2"), -120, 25);
+    this.addUnit(new Flotation(this.materials, this.telemetry), -80, 0);
+
+    // SECONDARY TREATMENT
+    this.addUnit(new Aeration(this.materials, this.telemetry, "AB-01", "Aeration Basin 1"), -40, -30);
+    this.addUnit(new Aeration(this.materials, this.telemetry, "AB-02", "Aeration Basin 2"), -40, 30);
+    this.addUnit(new BioFilter(this.materials, this.telemetry), 0, 0);
+
+    // TERTIARY TREATMENT
+    this.addUnit(new MBR(this.materials, this.telemetry), 80, 0);
+    this.addUnit(new NutrientRemoval(this.materials, this.telemetry), 110, -25);
+    this.addUnit(new UVSystem(this.materials, this.telemetry), 140, 0);
+    this.addUnit(new AOP(this.materials, this.telemetry), 165, 0);
+    
+    // NEW: SLUDGE LINE (at Z: -100)
+    this.addUnit(new Thickener(this.materials, this.telemetry), -100, -100);
+    this.addUnit(new Digester(this.materials, this.telemetry), -50, -100);
+    this.addUnit(new DewateringBuilding(this.materials, this.telemetry), 10, -100);
+
+    // Labels
+    this.labels.createPhaseLabel(this.scene, "PRIMARY TREATMENT", -140, -70);
+    this.labels.createPhaseLabel(this.scene, "SECONDARY / BIOLOGICAL", 0, -70);
+    this.labels.createPhaseLabel(this.scene, "TERTIARY POLISHING", 130, -70);
+    this.labels.createPhaseLabel(this.scene, "SLUDGE & SOLIDS HANDLING", -50, -130);
+
+    // Flow Paths
+    this.createFlowPaths();
+  }
+
+  addUnit(unitInstance, x, z) {
+    const unit = unitInstance.create(); unit.position.set(x, 0, z); this.scene.add(unit); this.units.push(unit);
+    if (unitInstance.target) { this.interactables.push(unitInstance.target); }
+    this.labels.createUnitLabel(unit, unit.userData.name, (u) => { window.dispatchEvent(new CustomEvent('unit-inspect', { detail: u })); });
+  }
+
+  createFlowPaths() {
+    // Water Line
+    const waterWaypoints = [
+      new THREE.Vector3(-200, 2, 0), new THREE.Vector3(-190, 2, 0), new THREE.Vector3(-160, 2, 0), new THREE.Vector3(-120, 2, -25), new THREE.Vector3(-120, 2, 25), new THREE.Vector3(-80, 2, 0), new THREE.Vector3(-40, 2, -30), new THREE.Vector3(-40, 2, 30), new THREE.Vector3(0, 2, 0), new THREE.Vector3(80, 2, 0), new THREE.Vector3(110, 2, 0), new THREE.Vector3(140, 2, 0), new THREE.Vector3(165, 2, 0), new THREE.Vector3(190, 2, 0), new THREE.Vector3(220, 0, -150)
+    ];
+    this.flowSystem.createWaterFlow(waterWaypoints);
+    
+    // NEW: Sludge Line (Connecting PST to Sludge Units)
+    const sludgeWaypoints = [
+        new THREE.Vector3(-120, 1, -25), // Start at PST
+        new THREE.Vector3(-120, 1, -80), // Pipe Bend
+        new THREE.Vector3(-100, 1, -100), // Thickener
+        new THREE.Vector3(-50, 1, -100), // Digester
+        new THREE.Vector3(10, 1, -100)   // Dewatering
+    ];
+    this.flowSystem.createSludgeFlow(sludgeWaypoints);
+  }
+}
+
+// ========== Main Application ==========
+class WWTPSimulation {
+  constructor() { this.init(); }
+  async init() {
+    this.showLoader();
+    this.sceneManager = new SceneManager(); this.scene = this.sceneManager.scene;
+    this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000); this.camera.position.set(0, 200, 300);
+    const container = document.createElement('div'); container.id = 'canvas-container'; document.getElementById('app').appendChild(container);
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' }); this.renderer.setSize(window.innerWidth, window.innerHeight); this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.0; container.appendChild(this.renderer.domElement);
+    const labelsContainer = document.createElement('div'); labelsContainer.id = 'labels-container'; document.getElementById('app').appendChild(labelsContainer);
+    this.labelRenderer = new CSS2DRenderer(); this.labelRenderer.setSize(window.innerWidth, window.innerHeight); labelsContainer.appendChild(this.labelRenderer.domElement);
+    const canvasElement = this.renderer.domElement; this.controls = new OrbitControls(this.camera, canvasElement); this.controls.enableDamping = true; this.controls.dampingFactor = 0.05; this.controls.maxPolarAngle = Math.PI / 2 - 0.05; this.controls.minDistance = 10; this.controls.maxDistance = 800;
+    
+    const sun = new THREE.DirectionalLight(0xfff5e6, 1.8); sun.position.set(-150, 200, 100); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.camera.left = -300; sun.shadow.camera.right = 300; sun.shadow.camera.top = 300; sun.shadow.camera.bottom = -300; this.scene.add(sun);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x8d99ae, 0.6); this.scene.add(hemiLight);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.3); this.scene.add(ambient);
+    
+    this.composer = new EffectComposer(this.renderer); this.composer.addPass(new RenderPass(this.scene, this.camera));
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85); bloomPass.threshold = 0.7; bloomPass.strength = 0.8; bloomPass.radius = 0.5; this.composer.addPass(bloomPass);
+
+    this.materials = new MaterialsManager(); this.telemetry = new TelemetryAI(); this.flowSystem = new FlowSystem(this.scene, this.materials); this.animations = new AnimationManager(); this.labels = new LabelsManager(); this.scada = new SCADAPanel(); this.minimap = new MinimapManager();
+    this.plantBuilder = new PlantBuilder(this.scene, this.materials, this.labels, this.flowSystem, this.telemetry);
+    await this.plantBuilder.build();
+
+    this.setupUI(); this.setupInteractions();
+    this.minimap.setup(this.plantBuilder.units, this.camera, this.controls);
+    window.addEventListener('resize', () => this.onResize());
+    this.hideLoader(); this.fitToScene(); this.animate();
+  }
+
+  setupUI() {
+    const header = document.createElement('div'); header.className = 'header'; header.innerHTML = `<h1>WWTP Digital Twin</h1><div class="subtitle"><div class="live-dot"></div>FULL PROCESS SIMULATION • REAL-TIME</div>`; document.getElementById('app').appendChild(header);
+    const controlsDiv = document.createElement('div'); controlsDiv.className = 'camera-controls';
+    // ADDED "Sludge Line" BUTTON
+    controlsDiv.innerHTML = `<button class="cam-btn active" data-view="overview">Plant Overview</button><button class="cam-btn" data-view="primary">Primary</button><button class="cam-btn" data-view="secondary">Secondary</button><button class="cam-btn" data-view="tertiary">Tertiary</button><button class="cam-btn" data-view="sludge">Sludge Line</button><button class="cam-btn" data-view="top">Top View</button><button class="cam-btn" data-view="side">Side View</button>`;
+    document.getElementById('app').appendChild(controlsDiv);
+    this.buttons = controlsDiv.querySelectorAll('.cam-btn'); this.buttons.forEach(btn => { btn.addEventListener('click', () => this.onCameraButton(btn)); });
+    window.addEventListener('scada-close', () => { this.fitToScene(); this.setActiveButton('overview'); });
+  }
+
+  onCameraButton(btn) {
+    const view = btn.dataset.view; this.setActiveButton(view); this.scada.hide();
+    switch (view) {
+      case 'overview': this.fitToScene(); break;
+      case 'primary': this.viewPhase(-200, -70); break;
+      case 'secondary': this.viewPhase(-60, 20); break;
+      case 'tertiary': this.viewPhase(70, 180); break;
+      case 'sludge': this.viewSludge(); break; // NEW
+      case 'top': this.topView(); break;
+      case 'side': this.sideView(); break;
+    }
+  }
+
+  setActiveButton(view) { this.buttons.forEach(b => b.classList.remove('active')); const btn = Array.from(this.buttons).find(b => b.dataset.view === view); if (btn) btn.classList.add('active'); }
+  setupInteractions() {
+    const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
+    window.addEventListener('pointerdown', (e) => { if (e.target.closest('button') || e.target.closest('.scada-panel') || e.target.closest('.minimap')) { return; } mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1; raycaster.setFromCamera(mouse, this.camera); const hits = raycaster.intersectObjects(this.plantBuilder.interactables, true); if (hits.length) { let target = hits[0].object; while (target.parent && !this.plantBuilder.units.includes(target)) { target = target.parent; } if (this.plantBuilder.units.includes(target)) { this.inspectUnit(target); } } });
+    window.addEventListener('unit-inspect', (e) => { this.inspectUnit(e.detail); });
+  }
+  inspectUnit(unit) { this.focusOnUnit(unit); this.scada.show(unit, this.telemetry); this.buttons.forEach(b => b.classList.remove('active')); }
+  focusOnUnit(unit) { const box = new THREE.Box3().setFromObject(unit); const center = box.getCenter(new THREE.Vector3()); const size = box.getSize(new THREE.Vector3()); const maxDim = Math.max(size.x, size.y, size.z); const offset = new THREE.Vector3(maxDim * 1.5, maxDim * 1.2, maxDim * 1.5); new TWEEN.Tween(this.camera.position).to(center.clone().add(offset), 1200).easing(TWEEN.Easing.Cubic.Out).start(); new TWEEN.Tween(this.controls.target).to(center, 1200).easing(TWEEN.Easing.Cubic.Out).onUpdate(() => this.controls.update()).start(); }
+  fitToScene() { const box = new THREE.Box3(); this.plantBuilder.units.forEach(unit => box.expandByObject(unit)); const center = box.getCenter(new THREE.Vector3()); new TWEEN.Tween(this.camera.position).to(center.clone().add(new THREE.Vector3(0, 200, 300)), 1500).easing(TWEEN.Easing.Cubic.Out).start(); new TWEEN.Tween(this.controls.target).to(center, 1500).easing(TWEEN.Easing.Cubic.Out).onUpdate(() => this.controls.update()).start(); }
+  viewPhase(minX, maxX) { const phaseUnits = this.plantBuilder.units.filter(unit => { return unit.position.x >= minX && unit.position.x <= maxX; }); if (phaseUnits.length > 0) { const box = new THREE.Box3(); phaseUnits.forEach(unit => box.expandByObject(unit)); const center = box.getCenter(new THREE.Vector3()); new TWEEN.Tween(this.camera.position).to(center.clone().add(new THREE.Vector3(0, 150, 200)), 1500).easing(TWEEN.Easing.Cubic.Out).start(); new TWEEN.Tween(this.controls.target).to(center, 1500).easing(TWEEN.Easing.Cubic.Out).onUpdate(() => this.controls.update()).start(); } }
+  
+  // NEW VIEW METHOD
+  viewSludge() {
+    const center = new THREE.Vector3(-45, 0, -100);
+    new TWEEN.Tween(this.camera.position).to(center.clone().add(new THREE.Vector3(0, 100, 150)), 1500).easing(TWEEN.Easing.Cubic.Out).start();
+    new TWEEN.Tween(this.controls.target).to(center, 1500).easing(TWEEN.Easing.Cubic.Out).onUpdate(() => this.controls.update()).start();
+  }
+
+  topView() { const box = new THREE.Box3(); this.plantBuilder.units.forEach(unit => box.expandByObject(unit)); const center = box.getCenter(new THREE.Vector3()); new TWEEN.Tween(this.camera.position).to(center.clone().add(new THREE.Vector3(0, 350, 0)), 1500).easing(TWEEN.Easing.Cubic.Out).start(); new TWEEN.Tween(this.controls.target).to(center, 1500).easing(TWEEN.Easing.Cubic.Out).onUpdate(() => this.controls.update()).start(); }
+  sideView() { const box = new THREE.Box3(); this.plantBuilder.units.forEach(unit => box.expandByObject(unit)); const center = box.getCenter(new THREE.Vector3()); new TWEEN.Tween(this.camera.position).to(center.clone().add(new THREE.Vector3(0, 50, 400)), 1500).easing(TWEEN.Easing.Cubic.Out).start(); new TWEEN.Tween(this.controls.target).to(center, 1500).easing(TWEEN.Easing.Cubic.Out).onUpdate(() => this.controls.update()).start(); }
+  onResize() { this.camera.aspect = window.innerWidth / window.innerHeight; this.camera.updateProjectionMatrix(); this.renderer.setSize(window.innerWidth, window.innerHeight); this.labelRenderer.setSize(window.innerWidth, window.innerHeight); this.composer.setSize(window.innerWidth, window.innerHeight); }
+  animate() { requestAnimationFrame(() => this.animate()); const delta = this.animations.getDelta(); const time = this.animations.getTime(); TWEEN.update(); this.controls.update(); this.flowSystem.update(time, delta); this.animations.update(this.plantBuilder.units, time, delta); this.minimap.update(this.camera); this.composer.render(); this.labelRenderer.render(this.scene, this.camera); }
+  showLoader() { const loader = document.createElement('div'); loader.className = 'loader'; loader.id = 'loader'; loader.innerHTML = `<h1>WWTP DIGITAL TWIN</h1><div class="loader-text">Initializing Industrial Simulation...</div><div class="loader-bar"><div class="loader-progress" id="loader-progress"></div></div>`; document.body.appendChild(loader); let progress = 0; const interval = setInterval(() => { progress += Math.random() * 15; if (progress >= 100) { progress = 100; clearInterval(interval); } document.getElementById('loader-progress').style.width = progress + '%'; }, 100); }
+  hideLoader() { setTimeout(() => { const loader = document.getElementById('loader'); if (loader) { loader.style.opacity = '0'; setTimeout(() => loader.remove(), 800); } }, 1500); }
+}
+
+// Start the simulation
+new WWTPSimulation();
+
+</script>
+</body>
+</html>

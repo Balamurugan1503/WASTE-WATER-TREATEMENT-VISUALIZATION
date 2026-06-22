@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AOP Digital Twin</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@300;400;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0b0e14;
+            --bg-panel: #151921;
+            --accent-blue: #00d2ff;
+            --accent-cyan: #00ffff;
+            --accent-green: #00ff9d;
+            --accent-purple: #bb86fc;
+            --accent-danger: #ff4444;
+            --accent-warn: #ffaa00;
+            --text-main: #e0f2fe;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --font-display: 'Rajdhani', sans-serif;
+            --font-mono: 'Roboto Mono', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-dark); color: var(--text-main); font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+
+        .btn {
+            background: rgba(0, 210, 255, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue);
+            padding: 12px 24px; border-radius: 4px; cursor: pointer; font-family: var(--font-display);
+            font-weight: 700; text-transform: uppercase; letter-spacing: 1px; transition: all 0.2s;
+        }
+        .btn:hover { background: var(--accent-blue); color: #000; box-shadow: 0 0 15px var(--accent-blue); }
+
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s ease; }
+        .modal.active { display: flex; opacity: 1; }
+
+        .sim-layout { width: 100%; height: 100%; display: grid; grid-template-columns: 360px 1fr 360px; }
+        .sim-sidebar { background: var(--bg-panel); border-right: 1px solid var(--border); padding: 25px; display: flex; flex-direction: column; overflow-y: auto; z-index: 10; }
+        .sim-sidebar.right { border-left: 1px solid var(--border); border-right: none; }
+        
+        h2 { font-family: var(--font-display); font-size: 1.8rem; color: #fff; margin-bottom: 5px; }
+        h3 { font-family: var(--font-display); font-size: 1.2rem; color: #fff; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 25px; }
+
+        .control-group { margin-bottom: 20px; }
+        .control-label { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 5px; color: var(--text-muted); }
+        .control-val { font-family: var(--font-mono); color: var(--accent-blue); }
+
+        /* Standardized Slider Styling */
+        input[type=range] { 
+            width: 100%; 
+            -webkit-appearance: none; 
+            appearance: none; 
+            background: transparent; 
+        }
+        input[type=range]::-webkit-slider-thumb { 
+            -webkit-appearance: none; appearance: none;
+            height: 16px; width: 16px; border-radius: 50%; 
+            background: var(--accent-blue); cursor: pointer; margin-top: -6px; 
+            box-shadow: 0 0 10px var(--accent-blue); 
+        }
+        input[type=range]::-webkit-slider-runnable-track { 
+            width: 100%; height: 4px; cursor: pointer; background: #334155; border-radius: 2px; 
+        }
+        input[type=range]::-moz-range-thumb {
+            height: 16px; width: 16px; border: none; border-radius: 50%; 
+            background: var(--accent-blue); cursor: pointer; box-shadow: 0 0 10px var(--accent-blue); 
+        }
+        input[type=range]::-moz-range-track {
+            width: 100%; height: 4px; cursor: pointer; background: #334155; border-radius: 2px; 
+        }
+
+        .output-box { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 15px; margin-top: auto; }
+        .output-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; }
+        .output-val { font-family: var(--font-mono); color: #fff; }
+
+        .sim-canvas-container { position: relative; width: 100%; height: 100%; background: radial-gradient(circle at center, #1a1a2e 0%, #000 100%); }
+        .close-sim { position: absolute; top: 20px; right: 20px; z-index: 20; background: rgba(0,0,0,0.5); border: 1px solid #fff; color: #fff; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: 0.2s; }
+        .close-sim:hover { background: var(--accent-danger); border-color: var(--accent-danger); }
+        .flex-gap { display: flex; gap: 10px; }
+        .w-full { width: 100%; }
+        
+        .zone-label { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; font-family: var(--font-mono); margin-right: 5px; }
+        .bg-radical { background: rgba(187, 134, 252, 0.2); color: #bb86fc; border: 1px solid #bb86fc; }
+    </style>
+</head>
+<body>
+
+    <div style="text-align: center;">
+        <h1 style="font-family: var(--font-display); font-size: 3rem; margin-bottom: 10px;">Advanced Oxidation Process</h1>
+        <p style="color: var(--text-muted); margin-bottom: 30px;">Unit Operation: Peroxone (O₃ + H₂O₂) Treatment</p>
+        <button class="btn" onclick="openSim()">Launch Simulator</button>
+    </div>
+
+    <div id="modal-aop" class="modal">
+        <button class="close-sim" onclick="closeSim()">✕</button>
+        
+        <div class="sim-layout">
+            <div class="sim-sidebar">
+                <h2>AOP Reactor</h2>
+                <p class="subtitle">Simulating Hydroxyl Radical (•OH) Formation</p>
+                
+                <h3>Operational Parameters</h3>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Ozone Dose (mg/L)</span> <span id="val-ozone" class="control-val">5</span></div>
+                    <input type="range" id="inp-ozone" min="1" max="15" value="5" step="0.5">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>H₂O₂ Conc. (mg/L)</span> <span id="val-h2o2" class="control-val">50</span></div>
+                    <input type="range" id="inp-h2o2" min="10" max="200" value="50" step="5">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Temperature (°C)</span> <span id="val-temp" class="control-val">25</span></div>
+                    <input type="range" id="inp-temp" min="15" max="40" value="25" step="1">
+                </div>
+
+                <div class="flex-gap">
+                    <button class="btn w-full" onclick="updatePhysics()">Update Reaction</button>
+                    <button class="btn w-full" style="border-color:#555; color:#aaa" onclick="resetSim()">Reset</button>
+                </div>
+
+                <div class="output-box">
+                    <div class="output-row"><span>•OH Generation:</span> <span id="out-rate" class="output-val" style="color:var(--accent-purple)">--</span></div>
+                    <div class="output-row"><span>Pollutant Decay (k):</span> <span id="out-decay" class="output-val">--</span></div>
+                    <div class="output-row"><span>Ozone Utilization:</span> <span id="out-util" class="output-val">--%</span></div>
+                    <div class="output-row"><span>Removal Eff:</span> <span id="out-eff" class="output-val" style="color:var(--accent-green)">--%</span></div>
+                    
+                    <div class="output-row" style="margin-top:10px; border-top:1px dashed #444; padding-top:10px;">
+                        <span id="out-status" style="font-size:0.8em; line-height:1.4">Initializing System...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sim-canvas-container" id="container-aop"></div>
+            
+            <div class="sim-sidebar right">
+                <h3>Process Efficiency</h3>
+                
+                <p style="font-size:0.8rem; color:#aaa; margin-bottom:5px;">Oxidation Performance</p>
+                <div style="height: 200px; margin-bottom: 20px;">
+                    <canvas id="chart-eff"></canvas>
+                </div>
+                
+                <div style="margin-top:20px; font-size:0.85rem; color:var(--text-muted); line-height: 1.6;">
+                    <strong>Visual Guide:</strong><br>
+                    <span class="zone-label bg-radical">radical cloud</span> Purple Glow = •OH Formation<br>
+                    <br>
+                    <strong>Particle Logic:</strong><br>
+                    <span style="color:#ff8800">● Brown</span> Pollutant (Raw)<br>
+                    <span style="color:#ffff00">● Yellow</span> Partially Oxidized<br>
+                    <span style="color:#ffffff">● White</span> Mineralized (Clean)<br>
+                    <span style="color:#00ffff">● Blue Sphere</span> Ozone Bubble
+                </div>
+                
+                <div style="margin-top:20px;">
+                    <button class="btn w-full" style="font-size:0.8rem" onclick="toggleXRay()">Toggle X-Ray Mode</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// --- DEFAULTS ---
+const DEFAULTS = { ozone: 5, h2o2: 50, temp: 25 };
+let sceneManager = null;
+let chartEff = null;
+
+class AOPSimulator {
+    constructor(containerId) {
+        this.container = document.getElementById(containerId);
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        
+        this.scene = new THREE.Scene();
+        this.scene.fog = new THREE.FogExp2(0x050510, 0.05);
+
+        this.camera = new THREE.PerspectiveCamera(50, this.width / this.height, 0.1, 100);
+        this.camera.position.set(0, 5, 12); 
+        this.camera.lookAt(0, 0, 0);
+        
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(this.width, this.height);
+        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.container.appendChild(this.renderer.domElement);
+        
+        // Lighting
+        const ambient = new THREE.AmbientLight(0x404040, 0.8);
+        this.scene.add(ambient);
+        const spotLight = new THREE.SpotLight(0x00ffff, 1.5);
+        spotLight.position.set(5, 10, 5);
+        this.scene.add(spotLight);
+        const purpLight = new THREE.PointLight(0xbb86fc, 0.5, 10);
+        purpLight.position.set(0, 2, 0);
+        this.scene.add(purpLight);
+
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+
+        this.objects = {};
+        this.simState = { xray: false, radicalIntensity: 0 }; 
+        this.particlesData = []; // Pollutants
+        this.bubblesData = [];   // Ozone Bubbles
+        this.simParams = { ...DEFAULTS };
+
+        this.initGeometry();
+        this.initParticles();
+        
+        window.addEventListener('resize', () => this.resize());
+        this.animate = this.animate.bind(this);
+        requestAnimationFrame(this.animate);
+    }
+
+    initGeometry() {
+        this.aopGroup = new THREE.Group();
+        this.scene.add(this.aopGroup);
+
+        // 1. Reactor Tank (Transparent)
+        const tankGeo = new THREE.BoxGeometry(8, 4, 4);
+        // Invert for inside view
+        tankGeo.scale(-1, 1, 1);
+        const tankMat = new THREE.MeshPhysicalMaterial({ 
+            color: 0x88ccff, 
+            transmission: 0.9, 
+            opacity: 0.3, 
+            transparent: true, 
+            roughness: 0.1, 
+            metalness: 0.1,
+            side: THREE.DoubleSide
+        });
+        const tank = new THREE.Mesh(tankGeo, tankMat);
+        tank.position.y = 0;
+        this.aopGroup.add(tank);
+        this.objects.tank = tank;
+
+        // 2. Water Volume
+        const waterGeo = new THREE.BoxGeometry(7.8, 3.8, 3.8);
+        const waterMat = new THREE.MeshPhysicalMaterial({
+            color: 0x0066aa,
+            transmission: 0.6,
+            opacity: 0.6,
+            transparent: true,
+            roughness: 0.2,
+            ior: 1.33,
+            depthWrite: false
+        });
+        this.objects.water = new THREE.Mesh(waterGeo, waterMat);
+        this.aopGroup.add(this.objects.water);
+
+        // 3. Injection Manifolds
+        const pipeGeo = new THREE.CylinderGeometry(0.1, 0.1, 3.5);
+        const pipeMat = new THREE.MeshStandardMaterial({ color: 0x888888 });
+        
+        // Ozone Sparger (Bottom)
+        const sparger = new THREE.Mesh(pipeGeo, pipeMat);
+        sparger.rotation.z = Math.PI / 2;
+        sparger.position.set(0, -1.8, 0);
+        this.aopGroup.add(sparger);
+
+        // H2O2 Injector (Top)
+        const injector = new THREE.Mesh(pipeGeo, pipeMat);
+        injector.rotation.z = Math.PI / 2;
+        injector.position.set(-2, 1.8, 0);
+        this.aopGroup.add(injector);
+
+        // 4. Radical Cloud (Volumetric Glow)
+        const cloudGeo = new THREE.SphereGeometry(2, 32, 32);
+        const cloudMat = new THREE.MeshBasicMaterial({
+            color: 0xbb86fc,
+            transparent: true,
+            opacity: 0.0, // Dynamic
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        this.objects.cloud = new THREE.Mesh(cloudGeo, cloudMat);
+        this.objects.cloud.scale.set(2, 1, 1);
+        this.aopGroup.add(this.objects.cloud);
+    }
+
+    createParticleTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 32; canvas.height = 32;
+        const ctx = canvas.getContext('2d');
+        const grd = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+        grd.addColorStop(0, 'rgba(255,255,255,1)');
+        grd.addColorStop(0.5, 'rgba(255,255,255,0.5)');
+        grd.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, 32, 32);
+        return new THREE.CanvasTexture(canvas);
+    }
+
+    initParticles() {
+        const pCount = 800;
+        const pPos = new Float32Array(pCount * 3);
+        const pCol = new Float32Array(pCount * 3);
+        this.particleHealth = new Float32Array(pCount); // 1.0 = dirty, 0.0 = clean
+
+        for(let i=0; i<pCount; i++) {
+            this.resetPollutant(i, pPos, pCol);
+        }
+
+        const pGeo = new THREE.BufferGeometry();
+        pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+        pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+
+        const pMat = new THREE.PointsMaterial({
+            size: 0.15, vertexColors: true, map: this.createParticleTexture(),
+            transparent: true, opacity: 0.9, blending: THREE.NormalBlending, depthWrite: false
+        });
+
+        this.objects.pollutants = new THREE.Points(pGeo, pMat);
+        this.aopGroup.add(this.objects.pollutants);
+
+        // Bubbles
+        const bCount = 500;
+        const bPos = new Float32Array(bCount * 3);
+        for(let i=0; i<bCount; i++) {
+            bPos[i*3] = (Math.random()-0.5) * 6;
+            bPos[i*3+1] = -2 + Math.random() * 4;
+            bPos[i*3+2] = (Math.random()-0.5) * 2;
+        }
+        const bGeo = new THREE.BufferGeometry();
+        bGeo.setAttribute('position', new THREE.BufferAttribute(bPos, 3));
+        const bMat = new THREE.PointsMaterial({
+            color: 0x00ffff, size: 0.1, transparent: true, opacity: 0.6,
+            map: this.createParticleTexture(), blending: THREE.AdditiveBlending, depthWrite: false
+        });
+        this.objects.bubbles = new THREE.Points(bGeo, bMat);
+        this.aopGroup.add(this.objects.bubbles);
+    }
+
+    resetPollutant(i, pos, col) {
+        pos[i*3] = -4.5; // Inlet
+        pos[i*3+1] = (Math.random()-0.5) * 3;
+        pos[i*3+2] = (Math.random()-0.5) * 3;
+        
+        this.particleHealth[i] = 1.0;
+        if(col) {
+            col[i*3] = 1.0; col[i*3+1] = 0.5; col[i*3+2] = 0.0; // Brown/Orange
+        }
+    }
+
+    updateConfig(params) {
+        this.simParams = params;
+        // Visual updates based on parameters
+        // Radical cloud intensity
+        const intensity = (params.ozone/15) * (params.h2o2/200);
+        this.simState.radicalIntensity = intensity;
+        this.objects.cloud.material.opacity = intensity * 0.4;
+    }
+
+    toggleXRay() {
+        this.simState.xray = !this.simState.xray;
+        const opacity = this.simState.xray ? 0.1 : 0.6;
+        this.objects.water.material.opacity = opacity;
+        this.objects.tank.material.wireframe = this.simState.xray;
+    }
+
+    resize() {
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        this.camera.aspect = this.width / this.height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(this.width, this.height);
+    }
+
+    animate() {
+        requestAnimationFrame(this.animate);
+        
+        const dt = 0.016;
+        
+        // 1. Calculate OH Rate (Physics)
+        const OH_rate = 0.06 * (this.simParams.ozone/5) * (this.simParams.h2o2/50) * Math.exp(0.04*(this.simParams.temp-25));
+        
+        // 2. Pollutants
+        const pPos = this.objects.pollutants.geometry.attributes.position.array;
+        const pCol = this.objects.pollutants.geometry.attributes.color.array;
+        const flowSpeed = 0.03;
+
+        for(let i=0; i<this.particleHealth.length; i++) {
+            // Move
+            pPos[i*3] += flowSpeed;
+            pPos[i*3+1] += (Math.random()-0.5)*0.01; // Jitter
+
+            // Reaction Logic
+            // Higher OH_rate = faster decay
+            const decay = OH_rate * 0.5 * dt; 
+            
+            // Interaction Zone: Center of tank (-2 to 2) gets bonus decay
+            if(Math.abs(pPos[i*3]) < 2) {
+                this.particleHealth[i] -= decay * 2.0; 
+            } else {
+                this.particleHealth[i] -= decay * 0.5;
+            }
+            if(this.particleHealth[i] < 0) this.particleHealth[i] = 0;
+
+            // Update Color based on Health
+            const h = this.particleHealth[i];
+            // 1.0 (Brown) -> 0.5 (Yellow) -> 0.0 (White/Transparent)
+            pCol[i*3] = 1.0; 
+            pCol[i*3+1] = 0.5 + (1-h)*0.5; 
+            pCol[i*3+2] = (1-h); 
+            
+            // Respawn
+            if(pPos[i*3] > 4.5) {
+                this.resetPollutant(i, pPos, pCol);
+            }
+        }
+        this.objects.pollutants.geometry.attributes.position.needsUpdate = true;
+        this.objects.pollutants.geometry.attributes.color.needsUpdate = true;
+
+        // 3. Bubbles
+        const bPos = this.objects.bubbles.geometry.attributes.position.array;
+        const bSpeed = 0.02 + (this.simParams.ozone/15)*0.03;
+        for(let i=0; i<bPos.length; i+=3) {
+            bPos[i+1] += bSpeed;
+            if(bPos[i+1] > 2) bPos[i+1] = -2; // Reset bottom
+        }
+        this.objects.bubbles.geometry.attributes.position.needsUpdate = true;
+
+        // 4. Cloud Pulse
+        const pulse = 1 + Math.sin(Date.now()*0.005) * 0.1;
+        this.objects.cloud.scale.set(2*pulse, 1*pulse, 1*pulse);
+
+        this.controls.update();
+        this.renderer.render(this.scene, this.camera);
+    }
+}
+
+// --- LOGIC & UI INTEGRATION ---
+function updatePhysics() {
+    const Ozone = parseFloat(document.getElementById('inp-ozone').value);
+    const H2O2 = parseFloat(document.getElementById('inp-h2o2').value);
+    const Temp = parseFloat(document.getElementById('inp-temp').value);
+
+    // Update UI Labels
+    document.getElementById('val-ozone').innerText = Ozone;
+    document.getElementById('val-h2o2').innerText = H2O2;
+    document.getElementById('val-temp').innerText = Temp;
+
+    // --- PHYSICS ENGINE ---
+    // A. Hydroxyl Radical Formation
+    const OH_rate = 0.06 * (Ozone/5) * (H2O2/50) * Math.exp(0.04*(Temp-25));
+    
+    // B. Pollutant Removal
+    const Removal = 100 * (1 - Math.exp(-OH_rate * 3.0)); // Adjusted constant for UI scale
+    
+    // Metrics
+    const k = 0.12 * OH_rate;
+    const util = Math.min(98, 40 + (Ozone/15)*30 + (Temp/40)*20);
+
+    // Outputs
+    document.getElementById('out-rate').innerText = OH_rate.toFixed(3) + " mM/s";
+    document.getElementById('out-decay').innerText = k.toFixed(3) + " s⁻¹";
+    document.getElementById('out-util').innerText = util.toFixed(1) + "%";
+    document.getElementById('out-eff').innerText = Removal.toFixed(1) + "%";
+
+    // Status
+    const statusEl = document.getElementById('out-status');
+    let statusText = "• Process Optimized.";
+    let statusColor = "#00ff9d";
+
+    if (Removal < 50) {
+        statusText = "• Poor Oxidation. Increase dose."; statusColor = "#ff4444";
+    } else if (Removal < 80) {
+        statusText = "• Suboptimal Performance."; statusColor = "#ffaa00";
+    }
+    statusEl.innerHTML = statusText;
+    statusEl.style.color = statusColor;
+
+    // Visuals
+    if(sceneManager) sceneManager.updateConfig({ ozone: Ozone, h2o2: H2O2, temp: Temp });
+    updateChart(Removal);
+}
+
+function updateChart(val) {
+    if(!chartEff) return;
+    const data = chartEff.data.datasets[0].data;
+    const labels = chartEff.data.labels;
+    if(data.length > 20) { data.shift(); labels.shift(); }
+    
+    labels.push(new Date().toLocaleTimeString());
+    data.push(val + (Math.random()-0.5)); // Slight noise
+    chartEff.update();
+}
+
+function initChart() {
+    const ctx = document.getElementById('chart-eff').getContext('2d');
+    chartEff = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{ 
+                label: 'Removal Efficiency (%)', 
+                borderColor: '#00d2ff', backgroundColor: 'rgba(0, 210, 255, 0.1)', 
+                data: [], fill: true, tension: 0.4 
+            }]
+        },
+        options: { 
+            responsive: true, maintainAspectRatio: false, animation: false,
+            plugins: { legend: { labels:{color:'#fff'} } }, 
+            scales: { 
+                y: { grid:{color:'#333'}, min: 0, max: 100, title:{display:true, text:'%', color:'#888'} }, 
+                x: { display: false } 
+            } 
+        }
+    });
+}
+
+function openSim() {
+    document.getElementById('modal-aop').classList.add('active');
+    if(!sceneManager) {
+        setTimeout(() => {
+            sceneManager = new AOPSimulator('container-aop');
+            initChart();
+            updatePhysics();
+            
+            ['inp-ozone', 'inp-h2o2', 'inp-temp'].forEach(id => {
+                document.getElementById(id).addEventListener('input', () => updatePhysics());
+            });
+            
+            // Update chart every second
+            setInterval(() => {
+                // Re-trigger update to push new data point
+                const btn = document.querySelector('.btn[onclick="updatePhysics()"]');
+                if(btn) btn.click();
+            }, 1000);
+
+        }, 100);
+    }
+}
+
+function closeSim() { document.getElementById('modal-aop').classList.remove('active'); }
+function resetSim() {
+    document.getElementById('inp-ozone').value = DEFAULTS.ozone;
+    document.getElementById('inp-h2o2').value = DEFAULTS.h2o2;
+    document.getElementById('inp-temp').value = DEFAULTS.temp;
+    updatePhysics();
+}
+function toggleXRay() { if(sceneManager) sceneManager.toggleXRay(); }
+</script>
+</body>
+</html>

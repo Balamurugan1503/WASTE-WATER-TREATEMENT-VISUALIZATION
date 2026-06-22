@@ -1,0 +1,1943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Waste Water Treatment Process Showcase</title>
+  
+  <!-- Premium Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700;800&family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons for scientific HUD aesthetics -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    /* ========== DESIGN SYSTEM & CONFIGURATION ========== */
+    :root {
+      --bg-dark: #070a13;
+      --bg-card: rgba(13, 20, 38, 0.45);
+      --bg-card-hover: rgba(18, 30, 58, 0.6);
+      --border-color: rgba(0, 242, 255, 0.15);
+      --border-hover: rgba(0, 242, 255, 0.45);
+      
+      /* Treatment Stage Colors */
+      --color-primary: #00d2ff;
+      --color-secondary: #00ff9d;
+      --color-tertiary: #a855f7;
+      --color-advanced: #f59e0b;
+      
+      /* Gradients */
+      --grad-primary: linear-gradient(135deg, #0072ff, #00d2ff);
+      --grad-secondary: linear-gradient(135deg, #059669, #00ff9d);
+      --grad-tertiary: linear-gradient(135deg, #7c3aed, #c084fc);
+      --grad-advanced: linear-gradient(135deg, #d97706, #fbbf24);
+      --grad-dark: linear-gradient(180deg, #0a0f1d, #05070c);
+      
+      /* Fonts */
+      --font-display: 'Rajdhani', sans-serif;
+      --font-sans: 'Inter', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: var(--grad-dark);
+      color: #e2e8f0;
+      font-family: var(--font-sans);
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ========== HIGH-TECH HUD CANVAS BACKGROUND ========== */
+    #bg-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    /* ========== LAYOUT WRAPPERS ========== */
+    header {
+      padding: 30px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+      background: rgba(7, 10, 19, 0.6);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand i {
+      font-size: 24px;
+      color: var(--color-primary);
+      text-shadow: 0 0 15px rgba(0, 210, 255, 0.6);
+      animation: pulse-glow 2s infinite ease-in-out;
+    }
+
+    .brand h1 {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 22px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #fff;
+    }
+
+    .brand h1 span {
+      background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 16px;
+    }
+
+    .btn-twin-master {
+      background: rgba(0, 210, 255, 0.1);
+      border: 1px solid var(--color-primary);
+      color: var(--color-primary);
+      padding: 10px 20px;
+      border-radius: 30px;
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 0 15px rgba(0, 210, 255, 0.1);
+    }
+
+    .btn-twin-master:hover {
+      background: var(--color-primary);
+      color: #000;
+      box-shadow: 0 0 25px rgba(0, 210, 255, 0.4);
+      transform: translateY(-2px);
+    }
+
+    /* ========== HERO SECTION ========== */
+    .hero {
+      max-width: 1000px;
+      margin: 40px auto 20px auto;
+      padding: 0 20px;
+      text-align: center;
+      z-index: 5;
+    }
+
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 210, 255, 0.08);
+      border: 1px solid rgba(0, 210, 255, 0.2);
+      border-radius: 40px;
+      padding: 6px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--color-primary);
+      margin-bottom: 20px;
+    }
+
+    .hero-tag i {
+      font-size: 8px;
+      color: var(--color-secondary);
+      animation: pulse-dot 1s infinite alternate;
+    }
+
+    .hero h2 {
+      font-family: var(--font-display);
+      font-size: 42px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      color: #fff;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    }
+
+    .hero p {
+      color: #94a3b8;
+      font-size: 16px;
+      line-height: 1.6;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    /* ========== STEPS PROGRESS TIMELINE ========== */
+    .progress-timeline-wrapper {
+      max-width: 1200px;
+      margin: 30px auto;
+      padding: 0 40px;
+      width: 100%;
+      z-index: 5;
+    }
+
+    .progress-timeline {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      background: rgba(13, 20, 38, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 50px;
+      padding: 16px 24px;
+      backdrop-filter: blur(8px);
+    }
+
+    .progress-line-bg {
+      position: absolute;
+      top: 50%;
+      left: 60px;
+      right: 60px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.05);
+      z-index: 1;
+      transform: translateY(-50%);
+    }
+
+    .progress-line-fill {
+      position: absolute;
+      top: 50%;
+      left: 60px;
+      height: 2px;
+      background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+      z-index: 2;
+      transform: translateY(-50%);
+      width: 0%;
+      transition: width 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+      box-shadow: 0 0 10px rgba(0, 210, 255, 0.5);
+    }
+
+    .progress-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      z-index: 3;
+      cursor: pointer;
+      width: 90px;
+    }
+
+    .step-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #1e293b;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.4);
+    }
+
+    .step-label {
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #64748b;
+      margin-top: 8px;
+      text-align: center;
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      white-space: nowrap;
+    }
+
+    .progress-step:hover .step-dot {
+      background: var(--color-primary);
+      border-color: #fff;
+      transform: scale(1.3);
+      box-shadow: 0 0 12px var(--color-primary);
+    }
+
+    .progress-step.active .step-dot {
+      background: var(--color-secondary);
+      border-color: #fff;
+      transform: scale(1.4);
+      box-shadow: 0 0 15px var(--color-secondary);
+    }
+
+    .progress-step.active .step-label {
+      color: #fff;
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+    }
+
+    .progress-step.passed .step-dot {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      box-shadow: 0 0 8px rgba(0, 210, 255, 0.4);
+    }
+
+    .progress-step.passed .step-label {
+      color: #94a3b8;
+    }
+
+    /* ========== CATEGORY TABS ========== */
+    .filter-tabs-wrapper {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 20px;
+      z-index: 5;
+    }
+
+    .filter-tabs {
+      display: flex;
+      gap: 6px;
+      background: rgba(13, 20, 38, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 40px;
+      padding: 6px;
+      backdrop-filter: blur(10px);
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      padding: 8px 18px;
+      border-radius: 30px;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .tab-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-btn.active {
+      color: #fff;
+      background: linear-gradient(135deg, #1e293b, rgba(59, 130, 246, 0.2));
+      box-shadow: 0 0 0 1px var(--border-color);
+      text-shadow: 0 0 8px rgba(255, 255, 255, 0.25);
+    }
+
+    /* ========== CAROUSEL WRAPPER & CONTAINER ========== */
+    .carousel-section {
+      width: 100%;
+      margin: 20px 0;
+      position: relative;
+      z-index: 5;
+      overflow: hidden;
+    }
+
+    .carousel-container {
+      width: 100%;
+      padding: 20px 60px;
+      overflow-x: hidden;
+      cursor: grab;
+      position: relative;
+    }
+
+    .carousel-container:active {
+      cursor: grabbing;
+    }
+
+    .carousel-track {
+      display: flex;
+      gap: 28px;
+      width: max-content;
+      will-change: transform;
+      transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+
+    /* Carousel Nav Arrows */
+    .carousel-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(13, 20, 38, 0.8);
+      border: 1px solid var(--border-color);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 10;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      backdrop-filter: blur(8px);
+    }
+
+    .carousel-arrow:hover {
+      background: var(--color-primary);
+      color: #000;
+      box-shadow: 0 0 15px var(--color-primary);
+      border-color: transparent;
+    }
+
+    .carousel-arrow.prev {
+      left: 16px;
+    }
+
+    .carousel-arrow.next {
+      right: 16px;
+    }
+
+    /* ========== PREMIUM GLASSMORPHISM CARD ========== */
+    .preview-card {
+      width: 340px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      backdrop-filter: blur(16px) saturate(180%);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 20px 30px rgba(0, 0, 0, 0.3);
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      transform-origin: center bottom;
+    }
+
+    /* Floating Micro-animation and Glow on Hover */
+    .preview-card:hover {
+      border-color: var(--border-hover);
+      box-shadow: 0 20px 40px rgba(0, 242, 255, 0.12), 
+                  0 0 25px rgba(0, 242, 255, 0.1);
+      transform: translateY(-10px) scale(1.02);
+    }
+
+    /* Card Status Header */
+    .card-header {
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .badge-category {
+      font-family: var(--font-display);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      color: #fff;
+    }
+
+    .badge-category.primary { background: var(--grad-primary); }
+    .badge-category.secondary { background: var(--grad-secondary); }
+    .badge-category.tertiary { background: var(--grad-tertiary); }
+    .badge-category.advanced { background: var(--grad-advanced); }
+
+    .unit-id {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.4);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .unit-id i {
+      font-size: 8px;
+      color: var(--color-primary);
+    }
+
+    /* scaled desktop preview iframe container */
+    .iframe-wrapper {
+      position: relative;
+      width: 100%;
+      height: 200px;
+      background: #000;
+      overflow: hidden;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .iframe-wrapper iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 850px;
+      height: 500px;
+      border: none;
+      transform: scale(0.4);
+      transform-origin: top left;
+      pointer-events: none; /* Block clicks, allow drag */
+    }
+
+    .iframe-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      z-index: 5;
+    }
+
+    /* Loading placeholder spinner */
+    .iframe-loader {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #080c16;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      z-index: 4;
+      transition: opacity 0.4s ease;
+    }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid rgba(0, 210, 255, 0.1);
+      border-top-color: var(--color-primary);
+      border-radius: 50%;
+      animation: spin 1s infinite linear;
+    }
+
+    .iframe-loader span {
+      font-family: var(--font-display);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    /* Card Details Body */
+    .card-body {
+      padding: 20px 18px;
+      display: flex;
+      flex-direction: column;
+      flex-grow: 1;
+    }
+
+    .card-body h3 {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .card-body p {
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: #94a3b8;
+      margin-bottom: 20px;
+      flex-grow: 1;
+    }
+
+    .btn-view-sim {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #fff;
+      padding: 12px;
+      border-radius: 8px;
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .preview-card:hover .btn-view-sim {
+      background: linear-gradient(135deg, rgba(0, 210, 255, 0.1), rgba(0, 255, 157, 0.05));
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+      box-shadow: 0 0 15px rgba(0, 210, 255, 0.15);
+    }
+
+    .btn-view-sim:hover {
+      background: var(--color-primary) !important;
+      color: #000 !important;
+      box-shadow: 0 0 20px var(--color-primary) !important;
+    }
+
+    /* ========== HUD SIMULATOR METADATA CARD (DOCK) ========== */
+    .hud-status-dock {
+      max-width: 1200px;
+      margin: 20px auto 40px auto;
+      padding: 0 40px;
+      width: 100%;
+      z-index: 5;
+    }
+
+    .hud-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      background: rgba(13, 20, 38, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 20px;
+      backdrop-filter: blur(6px);
+    }
+
+    .hud-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      padding-right: 12px;
+    }
+
+    .hud-item:last-child {
+      border-right: none;
+    }
+
+    .hud-label {
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    .hud-value {
+      font-family: var(--font-mono);
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .hud-value span.glow-text {
+      color: var(--color-secondary);
+      text-shadow: 0 0 10px rgba(0, 255, 157, 0.4);
+    }
+
+    /* ========== INTERACTIVE POPUP MODAL ========== */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(4, 6, 12, 0.92);
+      backdrop-filter: blur(20px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-window {
+      width: 92%;
+      height: 90%;
+      background: rgba(10, 16, 32, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.8),
+                  0 0 40px rgba(0, 210, 255, 0.05);
+      border-radius: 20px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transform: scale(0.95);
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .modal-overlay.active .modal-window {
+      transform: scale(1);
+    }
+
+    .modal-header {
+      padding: 16px 24px;
+      background: rgba(13, 20, 38, 0.9);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-title-area {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .modal-title-area h2 {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: #fff;
+    }
+
+    /* Real-time sync visual debugger widget */
+    .sync-debugger {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 255, 157, 0.06);
+      border: 1px solid rgba(0, 255, 157, 0.2);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--color-secondary);
+    }
+
+    .sync-debugger span.pulse-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--color-secondary);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--color-secondary);
+      animation: pulse-dot 1s infinite alternate;
+    }
+
+    .modal-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .modal-btn {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #a0aec0;
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .modal-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .modal-btn.close:hover {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: #ef4444;
+      color: #ef4444;
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+    }
+
+    .modal-body {
+      flex-grow: 1;
+      position: relative;
+      background: #000;
+    }
+
+    .modal-body iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #000;
+    }
+
+    /* Dynamic sync feed overlay log */
+    .sync-log-overlay {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      width: 320px;
+      max-height: 150px;
+      background: rgba(7, 10, 19, 0.85);
+      border: 1px solid rgba(0, 210, 255, 0.2);
+      border-radius: 8px;
+      padding: 12px;
+      z-index: 100;
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: all 0.3s ease;
+      font-size: 11px;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .sync-log-overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .sync-log-title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      color: var(--color-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 4px;
+      margin-bottom: 4px;
+    }
+
+    .sync-log-content {
+      font-family: var(--font-mono);
+      color: #a0aec0;
+      max-height: 100px;
+      overflow-y: auto;
+    }
+
+    .sync-log-row {
+      margin-bottom: 4px;
+      line-height: 1.4;
+    }
+
+    .sync-log-row span.label {
+      color: #718096;
+    }
+
+    .sync-log-row span.val {
+      color: #fff;
+    }
+
+    /* ========== FOOTER ========== */
+    footer {
+      margin-top: auto;
+      padding: 30px;
+      text-align: center;
+      background: rgba(7, 10, 19, 0.8);
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.3);
+      letter-spacing: 0.5px;
+      z-index: 5;
+    }
+
+    footer p span {
+      color: var(--color-primary);
+    }
+
+    /* ========== ANIMATIONS ========== */
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.7; transform: scale(1); text-shadow: 0 0 10px rgba(0, 210, 255, 0.4); }
+      50% { opacity: 1; transform: scale(1.05); text-shadow: 0 0 20px rgba(0, 210, 255, 0.8); }
+    }
+
+    @keyframes pulse-dot {
+      0% { opacity: 0.3; }
+      100% { opacity: 1; }
+    }
+
+    /* ========== RESPONSIVE RULES ========== */
+    @media (max-width: 1024px) {
+      .hud-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+      .hud-item {
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        padding-bottom: 10px;
+      }
+      .hud-item:nth-child(3), .hud-item:nth-child(4) {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+      .progress-timeline {
+        overflow-x: auto;
+        justify-content: flex-start;
+        gap: 20px;
+        border-radius: 20px;
+      }
+      .progress-line-bg, .progress-line-fill {
+        display: none;
+      }
+    }
+
+    @media (max-width: 768px) {
+      header {
+        padding: 20px;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .hero h2 {
+        font-size: 32px;
+      }
+      .carousel-container {
+        padding: 20px 20px;
+      }
+      .carousel-arrow {
+        display: none;
+      }
+      .hud-grid {
+        grid-template-columns: 1fr;
+      }
+      .hud-item {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        padding-bottom: 8px;
+      }
+      .hud-item:last-child {
+        border-bottom: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Background HUD Animation Canvas -->
+  <canvas id="bg-canvas"></canvas>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <i class="fa-solid fa-droplet"></i>
+      <h1>WWTP <span>Digital Twin Portal</span></h1>
+    </div>
+    <div class="header-actions">
+      <a href="main.html" class="btn-twin-master">
+        <i class="fa-solid fa-satellite-dish"></i> Launch Master twin
+      </a>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-tag">
+      <i class="fa-solid fa-circle"></i> Scientific Engineering Showcase
+    </div>
+    <h2>Waste Water Treatment Process Visualization</h2>
+    <p>Explore every stage of modern wastewater treatment through interactive simulations and animated process visualizations. Drill into the hydraulics, biochemistry, and physics models powering each individual unit operation.</p>
+  </section>
+
+  <!-- Progress Flow Indicator -->
+  <section class="progress-timeline-wrapper">
+    <div class="progress-timeline">
+      <div class="progress-line-bg"></div>
+      <div class="progress-line-fill" id="progress-line"></div>
+      
+      <div class="progress-step active" data-stage="Screening">
+        <div class="step-dot"></div>
+        <div class="step-label">Screening</div>
+      </div>
+      <div class="progress-step" data-stage="Grit">
+        <div class="step-dot"></div>
+        <div class="step-label">Grit</div>
+      </div>
+      <div class="progress-step" data-stage="Primary">
+        <div class="step-dot"></div>
+        <div class="step-label">Primary</div>
+      </div>
+      <div class="progress-step" data-stage="Secondary">
+        <div class="step-dot"></div>
+        <div class="step-label">Secondary</div>
+      </div>
+      <div class="progress-step" data-stage="Biological">
+        <div class="step-dot"></div>
+        <div class="step-label">Biological</div>
+      </div>
+      <div class="progress-step" data-stage="Nutrient Removal">
+        <div class="step-dot"></div>
+        <div class="step-label">Nutrient Rem.</div>
+      </div>
+      <div class="progress-step" data-stage="Membrane">
+        <div class="step-dot"></div>
+        <div class="step-label">Membrane</div>
+      </div>
+      <div class="progress-step" data-stage="Tertiary">
+        <div class="step-dot"></div>
+        <div class="step-label">Tertiary</div>
+      </div>
+      <div class="progress-step" data-stage="UV Disinfection">
+        <div class="step-dot"></div>
+        <div class="step-label">UV Disinf.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Category Filter Tabs -->
+  <section class="filter-tabs-wrapper">
+    <div class="filter-tabs">
+      <button class="tab-btn active" data-filter="All">All Operations</button>
+      <button class="tab-btn" data-filter="Primary">Primary</button>
+      <button class="tab-btn" data-filter="Secondary">Secondary</button>
+      <button class="tab-btn" data-filter="Tertiary">Tertiary</button>
+      <button class="tab-btn" data-filter="Advanced">Advanced</button>
+    </div>
+  </section>
+
+  <!-- Carousel Section -->
+  <section class="carousel-section">
+    <!-- Carousel Arrow Controls -->
+    <div class="carousel-arrow prev" id="arrow-prev"><i class="fa-solid fa-chevron-left"></i></div>
+    <div class="carousel-arrow next" id="arrow-next"><i class="fa-solid fa-chevron-right"></i></div>
+    
+    <div class="carousel-container" id="carousel-container">
+      <div class="carousel-track" id="carousel-track">
+        <!-- Cards injected dynamically -->
+      </div>
+    </div>
+  </section>
+
+  <!-- HUD Status Dock -->
+  <section class="hud-status-dock">
+    <div class="hud-grid">
+      <div class="hud-item">
+        <div class="hud-label"><i class="fa-solid fa-calculator"></i> Discovered Models</div>
+        <div class="hud-value" id="hud-total-models">00 Operations</div>
+      </div>
+      <div class="hud-item">
+        <div class="hud-label"><i class="fa-solid fa-wave-square"></i> System Telemetry</div>
+        <div class="hud-value"><span class="glow-text">LIVE SYNC READY</span></div>
+      </div>
+      <div class="hud-item">
+        <div class="hud-label"><i class="fa-solid fa-microchip"></i> Visual Engine</div>
+        <div class="hud-value">Three.js WebGL GPU</div>
+      </div>
+      <div class="hud-item">
+        <div class="hud-label"><i class="fa-solid fa-server"></i> Platform State</div>
+        <div class="hud-value" id="hud-category-focus">All Sectors</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Simulation Modal Overlay -->
+  <div class="modal-overlay" id="sim-modal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <div class="modal-title-area">
+          <h2 id="modal-title">Activated Sludge Simulator</h2>
+          <div class="sync-debugger" id="modal-sync-badge">
+            <span class="pulse-dot"></span>
+            Telemetry Standby
+          </div>
+        </div>
+        <div class="modal-controls">
+          <button class="modal-btn" id="modal-btn-fullscreen" title="Toggle Fullscreen">
+            <i class="fa-solid fa-expand"></i>
+          </button>
+          <button class="modal-btn close" id="modal-btn-close" title="Close Simulator">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <iframe id="modal-iframe" src="" allow="fullscreen"></iframe>
+        
+        <!-- Live telemetry debugger overlay log -->
+        <div class="sync-log-overlay" id="sync-log-box">
+          <div class="sync-log-title"><i class="fa-solid fa-network-wired"></i> PostMessage Sync Debug</div>
+          <div class="sync-log-content" id="sync-log-rows">
+            <!-- parameters will stream here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <p>© 2026 Wastewater Digital Twin Portal. Powered by <span>Three.js & Canvas HUD</span>. Designed with premium scientific aesthetics.</p>
+  </footer>
+
+  <!-- Application Logic -->
+  <script>
+    // ========== FALLBACK STATIC SHOWCASE DATA (Complete Map of all 28 Visualizations) ==========
+    const FALLBACK_DATA = [
+      // SCREENING STAGES
+      {
+        file: "screening.html",
+        title: "Fine Screening Twin",
+        category: "Primary",
+        stage: "Screening",
+        desc: "Mechanical bar screen model simulating solids filtering, approach velocity, headloss parameters, and risk analysis."
+      },
+      {
+        file: "unit-SCR-01.html",
+        title: "Screening Unit 01",
+        category: "Primary",
+        stage: "Screening",
+        desc: "Parallel mechanical screen bank showing hydraulics, clogging curves, and solids volume accumulation."
+      },
+      // GRIT STAGES
+      {
+        file: "grit.html",
+        title: "Grit Chamber Twin",
+        category: "Primary",
+        stage: "Grit",
+        desc: "Velocity-driven settlement chamber modeling sand settling velocities, scouring limits, and scraper cycles."
+      },
+      {
+        file: "unit-GRT-01.html",
+        title: "Grit Chamber Unit 01",
+        category: "Primary",
+        stage: "Grit",
+        desc: "Settling channel simulation modeling organic vs inorganic fractional separation and sand removal efficiency."
+      },
+      // PRIMARY SEDIMENTATION
+      {
+        file: "primary.html",
+        title: "Primary Settling Basin",
+        category: "Primary",
+        stage: "Primary",
+        desc: "Radial gravity clarifier with scum skimmer, modeling surface loading rates, detention times, and overflow."
+      },
+      {
+        file: "sedimentation.html",
+        title: "Sedimentation Clarifier",
+        category: "Primary",
+        stage: "Primary",
+        desc: "Solid-liquid separation tank detailing particulate gravity vectors and TSS concentration profiles."
+      },
+      {
+        file: "unit-PST-01.html",
+        title: "Primary Clarifier 01",
+        category: "Primary",
+        stage: "Primary",
+        desc: "Hydraulic primary settling tank modeling flocculated solids accumulation, overflow, and base sludge density."
+      },
+      {
+        file: "unit-PST-02.html",
+        title: "Primary Clarifier 02",
+        category: "Primary",
+        stage: "Primary",
+        desc: "Coagulation clarifier unit operation designed to process variable high-volume peak weather inflows."
+      },
+      // DISSOLVED AIR FLOTATION
+      {
+        file: "flotation.html",
+        title: "Dissolved Air Flotation",
+        category: "Primary",
+        stage: "Primary",
+        desc: "Micro-bubble saturator model showing chemical coagulation and skimming of floating oils, fats, and grease."
+      },
+      {
+        file: "unit-DAF-01.html",
+        title: "DAF Separator Unit 01",
+        category: "Primary",
+        stage: "Primary",
+        desc: "Advanced pressure DAF unit analyzing air solubility efficiency, recirculation ratios, and floating sludge density."
+      },
+      // SECONDARY STAGES
+      {
+        file: "secondary.html",
+        title: "Secondary Aeration Basin",
+        category: "Secondary",
+        stage: "Secondary",
+        desc: "Suspended growth reactor with fine bubble diffusers, showing DO mass transfer coefficients and kinetics."
+      },
+      {
+        file: "activated_sludge.html",
+        title: "Activated Sludge Basin",
+        category: "Secondary",
+        stage: "Secondary",
+        desc: "Aerated biological twin mapping MLSS concentration, sludge age (SRT), and micro-organism growth phases."
+      },
+      {
+        file: "unit-AB-01.html",
+        title: "Aeration Basin Unit 01",
+        category: "Secondary",
+        stage: "Secondary",
+        desc: "Three.js activated sludge reactor with cross-sectional grid detailing oxygen concentration."
+      },
+      {
+        file: "unit-AB-02.html",
+        title: "Aeration Basin Unit 02",
+        category: "Secondary",
+        stage: "Secondary",
+        desc: "Aerator basin demonstrating dissolved oxygen profiles, F/M ratio optimization, and biological loading limits."
+      },
+      // BIOFILTER STAGES
+      {
+        file: "biofilter.html",
+        title: "Trickling Biofilter",
+        category: "Secondary",
+        stage: "Biological",
+        desc: "Attached growth biological filter showing biofilm depth, media surface, hydraulic load, and carbonaceous digestion."
+      },
+      {
+        file: "unit-BF-01.html",
+        title: "Biofilter Tower 01",
+        category: "Secondary",
+        stage: "Biological",
+        desc: "Structured media trickling filter optimizing bacterial film growth rates and hydraulic washouts."
+      },
+      // NUTRIENT REMOVAL
+      {
+        file: "nutrient_removal.html",
+        title: "Nutrient Removal Stage",
+        category: "Tertiary",
+        stage: "Nutrient Removal",
+        desc: "Bioreactor with anoxic and anaerobic compartments executing nitrogen denitrification and chemical phosphorus stripping."
+      },
+      {
+        file: "unit-NR-01.html",
+        title: "Nutrient Removal Unit 01",
+        category: "Tertiary",
+        stage: "Nutrient Removal",
+        desc: "Bidentate chemical dosage and nitrogen-nitrate reduction chamber optimizing chemical-biological balance."
+      },
+      // MEMBRANE FILTRATION
+      {
+        file: "membrane_filtration.html",
+        title: "Membrane Bioreactor",
+        category: "Tertiary",
+        stage: "Membrane",
+        desc: "Hollow fiber microfiltration model highlighting membrane resistance, backwashing, and fouling indices."
+      },
+      {
+        file: "unit-MBR-01.html",
+        title: "MBR Membrane Bank 01",
+        category: "Tertiary",
+        stage: "Membrane",
+        desc: "Permeability filtration cassette tracing chemical cleaning cycles, flux, and transmembrane pressures."
+      },
+      // TERTIARY TREATMENT
+      {
+        file: "tertiary.html",
+        title: "Tertiary Deep Bed Filter",
+        category: "Tertiary",
+        stage: "Tertiary",
+        desc: "Sand filtration bed detailing particle capture depths, hydraulic headloss curves, and backwashing cycles."
+      },
+      // UV DISINFECTION
+      {
+        file: "uv_disinfection.html",
+        title: "UV Disinfection Channel",
+        category: "Tertiary",
+        stage: "UV Disinfection",
+        desc: "Disinfection unit with germicidal UV lamps deactivating pathogenic DNA. Models fluid transmittance variables."
+      },
+      {
+        file: "unit-UV-01.html",
+        title: "UV Lamp Bank Unit 01",
+        category: "Tertiary",
+        stage: "UV Disinfection",
+        desc: "UV disinfection bank with real-time dose calculations and lamp fouling sensor simulations."
+      },
+      // ADVANCED UNITS
+      {
+        file: "aop.html",
+        title: "Advanced Oxidation Reactor",
+        category: "Advanced",
+        stage: "Tertiary",
+        desc: "Hydroxyl radical chemical reactor treating micropollutants, industrial toxins, and active pharmaceuticals."
+      },
+      {
+        file: "unit-AOP-01.html",
+        title: "AOP Unit Operation 01",
+        category: "Advanced",
+        stage: "Tertiary",
+        desc: "Hydrogen peroxide and UV-catalytic oxidation process executing micro-pollutant trace destruction."
+      },
+      {
+        file: "unit-AD-01.html",
+        title: "Anaerobic Digester 01",
+        category: "Advanced",
+        stage: "Tertiary",
+        desc: "Sludge digestor utilizing biochemical pathways to produce methane-rich gas and stable organic solids."
+      },
+      {
+        file: "unit-G-THK.html",
+        title: "Gravity Sludge Thickener",
+        category: "Advanced",
+        stage: "Tertiary",
+        desc: "Gravity concentration tank compressing primary and secondary biological sludge to reduce sludge volume."
+      },
+      {
+        file: "unit-DW-01.html",
+        title: "Mechanical Dewatering Hall",
+        category: "Advanced",
+        stage: "Tertiary",
+        desc: "Belt presses and screw presses squeezing remaining water out of digested solids to produce biosolid cake."
+      }
+    ];
+
+    // Map stages to indices for Progress timeline calculation
+    const STAGE_ORDER = [
+      "Screening",
+      "Grit",
+      "Primary",
+      "Secondary",
+      "Biological",
+      "Nutrient Removal",
+      "Membrane",
+      "Tertiary",
+      "UV Disinfection"
+    ];
+
+    // State Variables
+    let showcaseData = [];
+    let currentFilter = "All";
+    let activeCardIndex = 0;
+    let autoplayTimer = null;
+    let dragStartX = 0;
+    let dragStartOffset = 0;
+    let isDragging = false;
+    let carouselOffset = 0;
+
+    // ========== HYBRID FILE AUTO-DISCOVERY ENGINE ==========
+    async function initShowcase() {
+      showcaseData = await discoverVisualizations();
+      
+      // Update HUD count
+      document.getElementById('hud-total-models').textContent = `${String(showcaseData.length).padStart(2, '0')} Operations`;
+      
+      renderCards();
+      setupCarouselControls();
+      setupFilters();
+      setupTimeline();
+      setupModal();
+      setupLazyLoading();
+      
+      // Start Autoplay
+      startAutoplay();
+    }
+
+    async function discoverVisualizations() {
+      try {
+        const response = await fetch('./');
+        if (!response.ok) throw new Error('Directory index request failed');
+        const text = await response.text();
+        
+        // Parse directory page links
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/html');
+        const links = Array.from(doc.querySelectorAll('a'));
+        
+        const htmlFiles = links
+          .map(a => a.getAttribute('href'))
+          .filter(href => href && href.endsWith('.html') && href !== 'index.html' && href !== 'main.html');
+        
+        if (htmlFiles.length === 0) throw new Error('No static HTML files located in the listing');
+        
+        console.log('Dynamic discovery found files:', htmlFiles);
+        
+        // Build showcase data dynamically, merging mapped fields where matching
+        const dynamicList = htmlFiles.map(file => {
+          // Check if we have mapped information for this file in our database
+          const mapped = FALLBACK_DATA.find(d => d.file.toLowerCase() === file.toLowerCase());
+          if (mapped) return mapped;
+          
+          // Guess categories from file name keywords
+          let category = "Advanced";
+          let stage = "Biological";
+          let title = file.replace('.html', '').replace(/-/g, ' ');
+          title = title.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          
+          if (file.includes('screen') || file.includes('scr')) {
+            category = "Primary"; stage = "Screening";
+          } else if (file.includes('grit') || file.includes('grt')) {
+            category = "Primary"; stage = "Grit";
+          } else if (file.includes('primary') || file.includes('pst') || file.includes('sediment')) {
+            category = "Primary"; stage = "Primary";
+          } else if (file.includes('second') || file.includes('sludge') || file.includes('ab-')) {
+            category = "Secondary"; stage = "Secondary";
+          } else if (file.includes('biofilter') || file.includes('bf-')) {
+            category = "Secondary"; stage = "Biological";
+          } else if (file.includes('nutrient') || file.includes('nr-')) {
+            category = "Tertiary"; stage = "Nutrient Removal";
+          } else if (file.includes('membrane') || file.includes('mbr')) {
+            category = "Tertiary"; stage = "Membrane";
+          } else if (file.includes('tertiary') || file.includes('filter')) {
+            category = "Tertiary"; stage = "Tertiary";
+          } else if (file.includes('uv') || file.includes('disinf')) {
+            category = "Tertiary"; stage = "UV Disinfection";
+          }
+          
+          return {
+            file,
+            title,
+            category,
+            stage,
+            desc: `Process simulator for wastewater treatment unit: ${title}. Run simulation to adjust controls and monitor performance.`
+          };
+        });
+        
+        // Sort files to keep process flow logical
+        return sortShowcaseData(dynamicList);
+        
+      } catch (err) {
+        console.log('Using static fallbacks due to:', err.message);
+        return FALLBACK_DATA;
+      }
+    }
+
+    function sortShowcaseData(list) {
+      // Sort priority based on stage order, then file name
+      return list.sort((a, b) => {
+        const indexA = STAGE_ORDER.indexOf(a.stage);
+        const indexB = STAGE_ORDER.indexOf(b.stage);
+        if (indexA !== indexB) {
+          return (indexA === -1 ? 99 : indexA) - (indexB === -1 ? 99 : indexB);
+        }
+        return a.file.localeCompare(b.file);
+      });
+    }
+
+    // ========== RENDER PREVIEW CARDS ==========
+    function renderCards() {
+      const track = document.getElementById('carousel-track');
+      track.innerHTML = '';
+      
+      const filtered = currentFilter === "All" 
+        ? showcaseData 
+        : showcaseData.filter(d => d.category === currentFilter);
+      
+      if (filtered.length === 0) {
+        track.innerHTML = '<div style="padding:40px; font-family:var(--font-display); color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:1px;">No simulation models found for this category.</div>';
+        return;
+      }
+
+      filtered.forEach((card, index) => {
+        const cardEl = document.createElement('div');
+        cardEl.className = 'preview-card';
+        cardEl.dataset.stage = card.stage;
+        cardEl.dataset.category = card.category;
+        cardEl.dataset.index = index;
+        
+        // Extract a clean visual unit code or default
+        let unitCode = card.file.replace('.html', '').toUpperCase();
+        if (!unitCode.startsWith('UNIT-')) {
+          unitCode = `SYS-${unitCode.slice(0, 3)}-${String(index + 1).padStart(2, '0')}`;
+        }
+
+        cardEl.innerHTML = `
+          <div class="card-header">
+            <span class="badge-category ${card.category.toLowerCase()}">${card.category}</span>
+            <div class="unit-id"><i class="fa-solid fa-microchip"></i> ${unitCode}</div>
+          </div>
+          <div class="iframe-wrapper" data-src="${card.file}">
+            <!-- Lazy loaded iframe will mount here -->
+            <div class="iframe-loader">
+              <div class="spinner"></div>
+              <span>Initializing WebGL</span>
+            </div>
+            <div class="iframe-overlay"></div>
+          </div>
+          <div class="card-body">
+            <h3>${card.title}</h3>
+            <p>${card.desc}</p>
+            <button class="btn-view-sim" onclick="openSimulatorModal('${card.file}', '${card.title}')">
+              <i class="fa-solid fa-square-poll-vertical"></i> View Visualization
+            </button>
+          </div>
+        `;
+        
+        track.appendChild(cardEl);
+      });
+
+      // Reset carousel position when filters change
+      activeCardIndex = 0;
+      updateCarouselPosition(false);
+    }
+
+    // ========== DYNAMIC LAZY LOADING ENGINE ==========
+    let lazyObserver = null;
+    function setupLazyLoading() {
+      if (lazyObserver) lazyObserver.disconnect();
+      
+      const options = {
+        root: document.getElementById('carousel-container'),
+        rootMargin: '100px',
+        threshold: 0.1
+      };
+      
+      lazyObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          const card = entry.target;
+          const wrapper = card.querySelector('.iframe-wrapper');
+          if (!wrapper) return;
+          
+          const fileSrc = wrapper.dataset.src;
+          let iframe = wrapper.querySelector('iframe');
+          
+          if (entry.isIntersecting) {
+            // Card is entering viewport: Mount and load iframe
+            if (!iframe) {
+              iframe = document.createElement('iframe');
+              iframe.setAttribute('loading', 'lazy');
+              iframe.src = fileSrc;
+              
+              // Remove loader once iframe finishes rendering Three.js scene
+              iframe.onload = () => {
+                const loader = wrapper.querySelector('.iframe-loader');
+                if (loader) loader.style.opacity = 0;
+                setTimeout(() => loader && loader.remove(), 400);
+              };
+              
+              wrapper.appendChild(iframe);
+            }
+          } else {
+            // Card scrolled out of view: Unload iframe to save GPU/WebGL contexts
+            if (iframe) {
+              iframe.src = 'about:blank';
+              iframe.remove();
+              
+              // Re-inject the loader markup
+              if (!wrapper.querySelector('.iframe-loader')) {
+                const loader = document.createElement('div');
+                loader.className = 'iframe-loader';
+                loader.innerHTML = `
+                  <div class="spinner"></div>
+                  <span>Initializing WebGL</span>
+                `;
+                wrapper.appendChild(loader);
+              }
+            }
+          }
+        });
+      }, options);
+      
+      document.querySelectorAll('.preview-card').forEach(card => {
+        lazyObserver.observe(card);
+      });
+    }
+
+    // ========== AUTOPLAY CAROUSEL WITH DRAG/SWIPE PHYSICS ==========
+    function setupCarouselControls() {
+      const container = document.getElementById('carousel-container');
+      const track = document.getElementById('carousel-track');
+      const nextBtn = document.getElementById('arrow-next');
+      const prevBtn = document.getElementById('arrow-prev');
+      
+      nextBtn.onclick = () => {
+        const maxIndex = track.querySelectorAll('.preview-card').length - 1;
+        if (activeCardIndex < maxIndex) {
+          activeCardIndex++;
+          updateCarouselPosition();
+          stopAutoplay();
+          startAutoplay();
+        } else {
+          // Bounce or wrap
+          activeCardIndex = 0;
+          updateCarouselPosition();
+        }
+      };
+      
+      prevBtn.onclick = () => {
+        if (activeCardIndex > 0) {
+          activeCardIndex--;
+          updateCarouselPosition();
+          stopAutoplay();
+          startAutoplay();
+        }
+      };
+
+      // Pointer Drag Support
+      container.onpointerdown = (e) => {
+        isDragging = true;
+        dragStartX = e.clientX;
+        dragStartOffset = carouselOffset;
+        container.style.cursor = 'grabbing';
+        stopAutoplay();
+      };
+
+      window.onpointermove = (e) => {
+        if (!isDragging) return;
+        const deltaX = e.clientX - dragStartX;
+        carouselOffset = dragStartOffset + deltaX;
+        track.style.transition = 'none';
+        track.style.transform = `translateX(${carouselOffset}px)`;
+      };
+
+      window.onpointerup = (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        container.style.cursor = 'grab';
+        
+        // Snap calculation
+        const cards = track.querySelectorAll('.preview-card');
+        if (cards.length === 0) return;
+        
+        const cardWidth = cards[0].offsetWidth + 28; // card width + gap
+        const dragDelta = e.clientX - dragStartX;
+        
+        // Snap threshold: if dragged more than 15% card width, slide to next/prev
+        const threshold = cardWidth * 0.15;
+        
+        if (dragDelta < -threshold && activeCardIndex < cards.length - 1) {
+          activeCardIndex++;
+        } else if (dragDelta > threshold && activeCardIndex > 0) {
+          activeCardIndex--;
+        }
+        
+        updateCarouselPosition();
+        startAutoplay();
+      };
+
+      // Pause Autoplay on Mouse Hover
+      container.onmouseenter = stopAutoplay;
+      container.onmouseleave = startAutoplay;
+    }
+
+    function updateCarouselPosition(animate = true) {
+      const track = document.getElementById('carousel-track');
+      const container = document.getElementById('carousel-container');
+      const cards = track.querySelectorAll('.preview-card');
+      
+      if (cards.length === 0) return;
+      
+      const cardWidth = cards[0].offsetWidth;
+      const gap = 28;
+      
+      // Center the active card in the viewport
+      const containerWidth = container.offsetWidth;
+      const targetOffset = (containerWidth / 2) - (cardWidth / 2) - (activeCardIndex * (cardWidth + gap)) - 60; // 60px is padding
+      
+      carouselOffset = targetOffset;
+      
+      track.style.transition = animate ? 'transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)' : 'none';
+      track.style.transform = `translateX(${carouselOffset}px)`;
+      
+      // Update Active timeline status based on visible card
+      updateActiveTimelineStep(cards[activeCardIndex]);
+    }
+
+    // ========== TIMELINE PROGRESS FILL AND SYNC ==========
+    function setupTimeline() {
+      const steps = document.querySelectorAll('.progress-step');
+      steps.forEach(step => {
+        step.onclick = () => {
+          const targetStage = step.dataset.stage;
+          
+          // Find first card matching stage name
+          const track = document.getElementById('carousel-track');
+          const cards = Array.from(track.querySelectorAll('.preview-card'));
+          const targetIndex = cards.findIndex(c => c.dataset.stage === targetStage);
+          
+          if (targetIndex !== -1) {
+            activeCardIndex = targetIndex;
+            updateCarouselPosition();
+            stopAutoplay();
+            startAutoplay();
+          }
+        };
+      });
+    }
+
+    function updateActiveTimelineStep(activeCard) {
+      if (!activeCard) return;
+      const stage = activeCard.dataset.stage;
+      const steps = Array.from(document.querySelectorAll('.progress-step'));
+      const activeStepIndex = steps.findIndex(s => s.dataset.stage === stage);
+      
+      if (activeStepIndex === -1) return;
+      
+      steps.forEach((step, idx) => {
+        step.classList.remove('active', 'passed');
+        if (idx === activeStepIndex) {
+          step.classList.add('active');
+        } else if (idx < activeStepIndex) {
+          step.classList.add('passed');
+        }
+      });
+      
+      // Fill progress bar width
+      const progressLine = document.getElementById('progress-line');
+      const totalSteps = steps.length;
+      const percentage = (activeStepIndex / (totalSteps - 1)) * 100;
+      progressLine.style.width = `${percentage}%`;
+    }
+
+    // ========== CATEGORY FILTERING ==========
+    function setupFilters() {
+      const tabs = document.querySelectorAll('.tab-btn');
+      tabs.forEach(tab => {
+        tab.onclick = () => {
+          tabs.forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          
+          currentFilter = tab.dataset.filter;
+          document.getElementById('hud-category-focus').textContent = currentFilter === 'All' ? 'All Sectors' : `${currentFilter} Phase`;
+          
+          renderCards();
+          setupLazyLoading();
+        };
+      });
+    }
+
+    // ========== SIMULATION POPUP MODAL (WITH SYNC FEED) ==========
+    let activeModalIframe = null;
+    function setupModal() {
+      const modal = document.getElementById('sim-modal');
+      const closeBtn = document.getElementById('modal-btn-close');
+      const fsBtn = document.getElementById('modal-btn-fullscreen');
+      const iframe = document.getElementById('modal-iframe');
+      
+      closeBtn.onclick = () => {
+        modal.classList.remove('active');
+        iframe.src = '';
+        activeModalIframe = null;
+        document.getElementById('sync-log-box').classList.remove('visible');
+        document.getElementById('sync-log-rows').innerHTML = '';
+        startAutoplay();
+      };
+      
+      fsBtn.onclick = () => {
+        const frameContainer = document.querySelector('.modal-window');
+        if (!document.fullscreenElement) {
+          frameContainer.requestFullscreen().catch(err => {
+            console.error('Error enabling fullscreen:', err.message);
+          });
+        } else {
+          document.exitFullscreen();
+        }
+      };
+
+      // Listen for telemetry sync logs from iframes
+      window.addEventListener('message', (event) => {
+        // Display sync feed if active modal is receiving data
+        if (event.data.type === 'PARAMS_CHANGED' && modal.classList.contains('active')) {
+          const logBox = document.getElementById('sync-log-box');
+          const logRows = document.getElementById('sync-log-rows');
+          const badge = document.getElementById('modal-sync-badge');
+          
+          logBox.classList.add('visible');
+          badge.innerHTML = `<span class="pulse-dot"></span> Live Telemetry Connected`;
+          badge.style.color = 'var(--color-secondary)';
+          badge.style.background = 'rgba(0, 255, 157, 0.06)';
+          
+          logRows.innerHTML = '';
+          Object.entries(event.data.params).forEach(([param, value]) => {
+            const row = document.createElement('div');
+            row.className = 'sync-log-row';
+            
+            // Format units based on param keys
+            let unit = '';
+            if (param === 'flow' || param === 'Q') unit = ' m³/h';
+            else if (param === 'opening') unit = ' mm';
+            else if (param === 'angle') unit = '°';
+            else if (param === 'ppm' || param === 'MLSS') unit = ' mg/L';
+            else if (param === 'velocity') unit = ' m/s';
+            else if (param === 'time') unit = ' s';
+            else if (param === 'depth') unit = ' m';
+            
+            row.innerHTML = `<span class="label">${param}:</span> <span class="val">${value}${unit}</span>`;
+            logRows.appendChild(row);
+          });
+        }
+      });
+    }
+
+    function openSimulatorModal(fileSrc, title) {
+      stopAutoplay();
+      const modal = document.getElementById('sim-modal');
+      const iframe = document.getElementById('modal-iframe');
+      
+      document.getElementById('modal-title').textContent = title;
+      iframe.src = fileSrc;
+      activeModalIframe = iframe;
+      
+      // Reset debugger badges
+      const badge = document.getElementById('modal-sync-badge');
+      badge.innerHTML = `<span class="pulse-dot" style="background:#718096; box-shadow:none;"></span> Telemetry Standby`;
+      badge.style.color = '#718096';
+      badge.style.background = 'rgba(255, 255, 255, 0.02)';
+      
+      modal.classList.add('active');
+    }
+
+    // ========== AUTOPLAY UTILITIES ==========
+    function startAutoplay() {
+      if (autoplayTimer) clearInterval(autoplayTimer);
+      autoplayTimer = setInterval(() => {
+        const track = document.getElementById('carousel-track');
+        const cards = track.querySelectorAll('.preview-card');
+        if (cards.length === 0) return;
+        
+        if (activeCardIndex < cards.length - 1) {
+          activeCardIndex++;
+        } else {
+          activeCardIndex = 0;
+        }
+        updateCarouselPosition();
+      }, 4000);
+    }
+
+    function stopAutoplay() {
+      if (autoplayTimer) {
+        clearInterval(autoplayTimer);
+        autoplayTimer = null;
+      }
+    }
+
+    // ========== HIGH-PERFORMANCE INTERACTIVE CANVAS BACKGROUND ==========
+    function initCanvasAnimation() {
+      const canvas = document.getElementById('bg-canvas');
+      const ctx = canvas.getContext('2d');
+      
+      let width = canvas.width = window.innerWidth;
+      let height = canvas.height = window.innerHeight;
+      
+      // Handle resizing
+      window.addEventListener('resize', () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      });
+
+      // Particles List (Bubbles & Microorganism drifts)
+      const particles = [];
+      const particleCount = 60;
+      
+      for (let i = 0; i < particleCount; i++) {
+        particles.push({
+          x: Math.random() * width,
+          y: Math.random() * height + height, // Start off bottom
+          radius: Math.random() * 2.5 + 0.5,
+          speedY: -(Math.random() * 1.0 + 0.3),
+          swayRange: Math.random() * 15 + 5,
+          swaySpeed: Math.random() * 0.02 + 0.005,
+          swayOffset: Math.random() * 100,
+          color: Math.random() > 0.4 ? 'rgba(0, 210, 255, 0.15)' : 'rgba(0, 255, 157, 0.12)'
+        });
+      }
+
+      // Ripples List (Triggered on mouse move & click)
+      const ripples = [];
+      
+      window.addEventListener('pointermove', (e) => {
+        // Trigger sparse mouse move ripples
+        if (Math.random() < 0.08) {
+          createRipple(e.clientX, e.clientY, 80, 1.2, 'rgba(0, 210, 255, 0.08)');
+        }
+      });
+
+      window.addEventListener('click', (e) => {
+        // High intensity ripple on click
+        createRipple(e.clientX, e.clientY, 200, 2.5, 'rgba(0, 255, 157, 0.2)');
+        createRipple(e.clientX, e.clientY, 150, 1.8, 'rgba(0, 210, 255, 0.15)');
+      });
+
+      function createRipple(x, y, maxRadius, speed, color) {
+        ripples.push({
+          x,
+          y,
+          radius: 0,
+          maxRadius,
+          speed,
+          alpha: 1.0,
+          color
+        });
+      }
+
+      function animate() {
+        ctx.clearRect(0, 0, width, height);
+        
+        // 1. Draw drifting particles (Rising micro bubbles)
+        particles.forEach(p => {
+          p.y += p.speedY;
+          const sway = Math.sin(p.swayOffset) * p.swayRange * 0.1;
+          p.swayOffset += p.swaySpeed;
+          
+          // Draw particle
+          ctx.beginPath();
+          ctx.arc(p.x + sway, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = p.color;
+          ctx.fill();
+          
+          // Reset when particle drifts off top screen
+          if (p.y < -10) {
+            p.y = height + 10;
+            p.x = Math.random() * width;
+          }
+        });
+        
+        // Reset shadow for ripples
+        ctx.shadowBlur = 0;
+        
+        // 2. Draw ripples (Wave front circle ripples)
+        ripples.forEach((r, idx) => {
+          r.radius += r.speed;
+          r.alpha = 1.0 - (r.radius / r.maxRadius);
+          
+          if (r.alpha <= 0) {
+            ripples.splice(idx, 1);
+            return;
+          }
+          
+          // Draw wave rings
+          ctx.beginPath();
+          ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+          ctx.strokeStyle = r.color.replace(/[^,]+(?=\))/, r.alpha);
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          
+          // Sub ring
+          if (r.radius > 20) {
+            ctx.beginPath();
+            ctx.arc(r.x, r.y, r.radius - 20, 0, Math.PI * 2);
+            ctx.strokeStyle = r.color.replace(/[^,]+(?=\))/, r.alpha * 0.5);
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+          }
+        });
+        
+        requestAnimationFrame(animate);
+      }
+      
+      animate();
+    }
+
+    // ========== BOOT APPLICATION ==========
+    window.onload = () => {
+      initShowcase();
+      initCanvasAnimation();
+      
+      // Adjust active cards when window is resized
+      let resizeTimer;
+      window.onresize = () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          updateCarouselPosition(false);
+        }, 100);
+      };
+    };
+  </script>
+</body>
+</html>

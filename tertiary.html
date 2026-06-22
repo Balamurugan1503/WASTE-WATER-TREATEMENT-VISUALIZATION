@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>4-Stage Tertiary Treatment Twin (Membrane Enhanced)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Ensure full width/height with no margins */
+        html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #0f172a; font-family: 'Segoe UI', sans-serif; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+        
+        .label {
+            color: #e2e8f0;
+            font-family: 'Consolas', monospace;
+            padding: 6px 10px;
+            background: rgba(15, 23, 42, 0.9);
+            border-left: 3px solid #0ea5e9;
+            backdrop-filter: blur(4px);
+            font-size: 12px;
+            font-weight: 600;
+            pointer-events: none;
+            user-select: none;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+            margin-top: -20px;
+            white-space: pre-line;
+            text-align: center;
+        }
+
+        #loader {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #38bdf8;
+            z-index: 999;
+            transition: opacity 0.8s ease-out;
+        }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 4px solid #1e293b;
+            border-top: 4px solid #38bdf8;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Attractive Glossy Button Style */
+        .glossy-button {
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+        .glossy-button:hover {
+            opacity: 0.9;
+            box-shadow: 0 6px 8px -1px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+            transform: translateY(-1px);
+        }
+        .glossy-button:active {
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+            transform: translateY(1px);
+        }
+        /* Glossy effect layer */
+        .glossy-button::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 50%;
+            background: linear-gradient(rgba(255,255,255,0.4), rgba(255,255,255,0.1));
+            pointer-events: none;
+            border-radius: 6px 6px 0 0;
+        }
+
+        /* Flashy Background Effect on Hover */
+        .flashy-bg:hover {
+            animation: flash-pulse 0.5s infinite alternate; /* Apply flash animation on hover */
+        }
+
+        @keyframes flash-pulse {
+            from { background-color: var(--button-color-base); }
+            to { background-color: var(--button-color-flash); }
+        }
+
+
+        /* Specific Color Styles for Buttons (with Flash Colors) */
+        .btn-membrane { 
+            --button-color-base: #0ea5e9; /* Sky-500 */
+            --button-color-flash: #38bdf8; /* Sky-400 */
+            color: #fff; 
+            border: 1px solid #0284c7; 
+            background-color: var(--button-color-base);
+        }
+        .btn-bio { 
+            --button-color-base: #f59e0b; /* Amber-500 */
+            --button-color-flash: #fbbf24; /* Amber-400 */
+            color: #fff; 
+            border: 1px solid #d97706; 
+            background-color: var(--button-color-base);
+        }
+        .btn-uv { 
+            --button-color-base: #8b5cf6; /* Violet-500 */
+            --button-color-flash: #a78bfa; /* Violet-400 */
+            color: #fff; 
+            border: 1px solid #7c3aed; 
+            background-color: var(--button-color-base);
+        }
+        .btn-aop { 
+            --button-color-base: #10b981; /* Emerald-500 */
+            --button-color-flash: #34d399; /* Emerald-400 */
+            color: #fff; 
+            border: 1px solid #059669; 
+            background-color: var(--button-color-base);
+        }
+
+        /* --- INDUSTRY STANDARD SLIDER STYLING --- */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px; /* Slightly thicker bar */
+            border-radius: 3px;
+            background: #475569; /* Slate-600 background for the track */
+            cursor: pointer;
+            outline: none;
+        }
+        
+        /* Webkit Thumb (Flow Rate - Sky Blue) */
+        input#input-flow::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #0ea5e9; /* Sky-500 thumb color */
+            border: 2px solid #fff;
+            box-shadow: 0 0 5px rgba(14, 165, 233, 0.8), 0 0 1px 1px rgba(0, 0, 0, 0.3); /* Glow and shadow */
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        input#input-flow::-webkit-slider-thumb:hover {
+             background: #38bdf8; /* Sky-400 on hover */
+        }
+        
+        /* Webkit Thumb (AOP Intensity - Emerald Green) */
+        input#input-dose::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #10b981; /* Emerald-500 thumb color */
+            border: 2px solid #fff;
+            box-shadow: 0 0 5px rgba(16, 185, 129, 0.8), 0 0 1px 1px rgba(0, 0, 0, 0.3); /* Glow and shadow */
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        input#input-dose::-webkit-slider-thumb:hover {
+             background: #34d399; /* Emerald-400 on hover */
+        }
+
+        /* Error message style */
+        #error-message {
+            display: none;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #ef4444;
+            z-index: 1000;
+            background: rgba(15, 23, 42, 0.95);
+            padding: 2rem;
+            border-radius: 1rem;
+            border: 1px solid #ef4444;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="loader">
+        <div class="spinner"></div>
+        <div class="text-sm tracking-widest uppercase">Initializing 4-Stage System...</div>
+    </div>
+
+    <div id="error-message">
+        <h2 class="text-2xl font-bold mb-2">⚠️ Graphics Error</h2>
+        <p>3D visualization could not be initialized.</p>
+        <p class="text-sm text-slate-400 mt-2 mb-4">Your browser or environment is blocking WebGL hardware acceleration.</p>
+        <div class="text-xs bg-slate-900 p-2 rounded text-left font-mono overflow-auto max-h-24" id="error-details"></div>
+    </div>
+
+    <div class="absolute top-6 right-6 w-80 bg-slate-900/90 text-slate-200 p-6 rounded-lg border border-slate-700 shadow-2xl backdrop-blur-md z-50">
+        <div class="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
+            <h2 class="text-lg font-bold text-sky-400 tracking-tight">CONTROL PANEL</h2>
+            <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+        </div>
+        
+        <div class="space-y-6">
+            <p class="text-xs text-slate-400 text-center">Click on any module to zoom in or select a stage below.</p>
+            
+            <div class="group border-b border-slate-700 pb-4">
+                <div class="flex justify-between text-xs font-semibold text-slate-400 mb-2 uppercase">
+                    <span>Flow Rate</span>
+                    <span id="val-flow" class="text-sky-300">50 m³/h</span>
+                </div>
+                <input type="range" id="input-flow" min="0" max="100" value="50" class="w-full">
+                <button onclick="openStagePage('Membrane Filtration')" class="glossy-button flashy-bg btn-membrane w-full mt-3 text-sm">👁️ View Membrane</button>
+            </div>
+
+            <div class="group border-b border-slate-700 pb-4">
+                <button onclick="openStagePage('Nutrient Removal')" class="glossy-button flashy-bg btn-bio w-full text-sm">👁️ View Nutrient Removal</button>
+            </div>
+
+            <div class="group border-b border-slate-700 pb-4">
+                <button id="btn-uv" class="px-3 py-2 bg-purple-900/50 hover:bg-purple-800/50 border border-purple-500/30 text-purple-300 rounded text-xs font-bold transition w-full">UV POWER</button>
+                <button onclick="openStagePage('UV Treatment')" class="glossy-button flashy-bg btn-uv w-full mt-3 text-sm">👁️ View UV</button>
+            </div>
+
+            <div class="group border-b border-slate-700 pb-4">
+                <div class="flex justify-between text-xs font-semibold text-slate-400 mb-2 uppercase">
+                    <span>AOP Intensity</span>
+                    <span id="val-dose" class="text-emerald-300">50%</span>
+                </div>
+                <input type="range" id="input-dose" min="0" max="100" value="50" class="w-full">
+                <button onclick="openStagePage('Advanced Oxidation')" class="glossy-button flashy-bg btn-aop w-full mt-3 text-sm">👁️ View AOP</button>
+            </div>
+
+            <div class="bg-slate-800/50 rounded border border-slate-700 p-4 mt-4">
+                <button id="btn-reset" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold transition text-slate-300 border border-slate-600 w-full">RESET CAMERA VIEW</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        // Dummy Page Function - Replace alert/console.log with window.open('stage-X.html') for real use
+        function openStagePage(stageName) {
+            console.log(`--- Opening Stage Page: ${stageName} ---`);
+            alert(`Opening a new page for ${stageName} animation. (Dummy Functionality)`);
+            // You can replace the alert/console.log with:
+            // window.open('stage_' + stageName.toLowerCase().replace(/ /g, '_') + '.html', '_blank');
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // --- 1. Procedural Texture Generation ---
+        function createNoiseTexture(width, height, type = 'concrete') {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                
+                ctx.fillStyle = type === 'concrete' ? '#808080' : '#ffffff';
+                ctx.fillRect(0, 0, width, height);
+
+                const imgData = ctx.getImageData(0, 0, width, height);
+                const data = imgData.data;
+                
+                for (let i = 0; i < data.length; i += 4) {
+                    const grain = (Math.random() - 0.5) * (type === 'concrete' ? 60 : 20);
+                    data[i] = Math.min(255, Math.max(0, data[i] + grain));
+                    data[i+1] = Math.min(255, Math.max(0, data[i+1] + grain));
+                    data[i+2] = Math.min(255, Math.max(0, data[i+2] + grain));
+                }
+                ctx.putImageData(imgData, 0, 0);
+
+                if(type === 'concrete') {
+                    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+                    for(let i=0; i<50; i++) {
+                        ctx.beginPath();
+                        ctx.moveTo(Math.random()*width, Math.random()*height);
+                        ctx.lineTo(Math.random()*width, Math.random()*height);
+                        ctx.stroke();
+                    }
+                }
+
+                const tex = new THREE.CanvasTexture(canvas);
+                tex.wrapS = THREE.RepeatWrapping;
+                tex.wrapT = THREE.RepeatWrapping;
+                return tex;
+            } catch(e) {
+                return null; // Fallback
+            }
+        }
+
+        const concreteTex = createNoiseTexture(512, 512, 'concrete');
+        const metalRoughnessTex = createNoiseTexture(256, 256, 'metal');
+
+        // --- 2. Materials ---
+        const MAT = {
+            concrete: new THREE.MeshStandardMaterial({ color: 0x8c9299, map: concreteTex || null, bumpMap: concreteTex || null, bumpScale: 0.2, roughness: 0.9 }),
+            steel: new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.3, metalness: 0.8, roughnessMap: metalRoughnessTex || null }),
+            darkSteel: new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5, metalness: 0.6 }),
+            safetyYellow: new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3, metalness: 0.1 }),
+            water: new THREE.MeshPhysicalMaterial({ color: 0x38bdf8, metalness: 0.1, roughness: 0.05, transmission: 0.9, thickness: 1.5, transparent: true, opacity: 0.8 }),
+            glass: new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 0, roughness: 0, transmission: 0.99, transparent: true, thickness: 0.5 }),
+            pipe: new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.4, metalness: 0.5 }),
+            
+            // New material for membrane vessels to allow transparency effect
+            membraneVessel: new THREE.MeshPhysicalMaterial({ 
+                color: 0xffffff, 
+                roughness: 0.2, 
+                metalness: 0.1, 
+                clearcoat: 1.0,
+                transparent: true,
+                opacity: 1.0
+            }),
+            // New material for AOP tower
+            aopTower: new THREE.MeshStandardMaterial({ 
+                color: 0xe2e8f0, 
+                roughness: 0.3, 
+                metalness: 0.8, 
+                transparent: true,
+                opacity: 1.0
+            }),
+            // Specific materials for membrane internals
+            membraneElement: new THREE.MeshStandardMaterial({ color: 0xcfcfcf, roughness: 0.7 }),
+            feedWater: new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6 }), // Slightly dirty blue
+            filtrateWater: new THREE.MeshBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.7 }), // Cleaner blue
+            concentrateWater: new THREE.MeshBasicMaterial({ color: 0xffa500, transparent: true, opacity: 0.6 }), // Orange for concentrate
+        };
+
+        // --- 3. Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f172a); 
+        scene.fog = new THREE.FogExp2(0x0f172a, 0.002); // Reduced fog for larger scenes
+
+        // FIX 1: Increased Far Clip Plane to 5000 to see horizon
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 5000);
+        camera.position.set(0, 45, 90); 
+
+        let renderer = null;
+
+        try {
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: true, 
+                alpha: true,
+                failIfMajorPerformanceCaveat: false 
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            // Note: Loader is removed in the Init section at the bottom
+
+        } catch(e) {
+             console.error("WebGL Init Failed:", e);
+             const loader = document.getElementById('loader');
+             if (loader) loader.style.display = 'none';
+             const errMsg = document.getElementById('error-message');
+             if (errMsg) {
+                errMsg.style.display = 'block';
+                const det = document.getElementById('error-details');
+                if (det) det.innerText = e.message;
+             }
+        }
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.getElementById('canvas-container').appendChild(labelRenderer.domElement);
+
+        const domTarget = renderer ? renderer.domElement : labelRenderer.domElement;
+        const controls = new OrbitControls(camera, domTarget);
+        controls.enableDamping = true;
+        controls.maxPolarAngle = Math.PI / 2 - 0.05;
+
+        // --- 4. Lighting ---
+        const ambient = new THREE.HemisphereLight(0xffffff, 0x0f172a, 0.6);
+        scene.add(ambient);
+
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        mainLight.position.set(20, 80, 50);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 2048;
+        mainLight.shadow.mapSize.height = 2048;
+        scene.add(mainLight);
+
+        // FIX 2: Infinite Floor (Increased to 5000)
+        const grid = new THREE.GridHelper(5000, 500, 0x1e293b, 0x1e293b);
+        scene.add(grid);
+        const floorGeo = new THREE.PlaneGeometry(5000, 5000);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x020617, roughness: 0.8 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.1;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // --- 5. Geometry Helper Functions ---
+        function createPad(width, depth) {
+            const geo = new THREE.BoxGeometry(width, 0.5, depth);
+            const mesh = new THREE.Mesh(geo, MAT.concrete);
+            mesh.position.y = 0.25;
+            mesh.receiveShadow = true;
+            return mesh;
+        }
+
+        function createRailing(width, depth) {
+            const group = new THREE.Group();
+            const postGeo = new THREE.CylinderGeometry(0.1, 0.1, 3);
+            const railGeo = new THREE.CylinderGeometry(0.08, 0.08, width);
+            const sideRailGeo = new THREE.CylinderGeometry(0.08, 0.08, depth);
+
+            const positions = [ [-width/2, -depth/2], [width/2, -depth/2], [-width/2, depth/2], [width/2, depth/2], [0, -depth/2], [0, depth/2] ];
+            positions.forEach(pos => {
+                const post = new THREE.Mesh(postGeo, MAT.safetyYellow);
+                post.position.set(pos[0], 1.5, pos[1]);
+                group.add(post);
+            });
+
+            [2.8, 1.5].forEach(y => {
+                const r1 = new THREE.Mesh(railGeo, MAT.safetyYellow); r1.rotation.z = Math.PI/2; r1.position.set(0, y, -depth/2); group.add(r1);
+                const r2 = r1.clone(); r2.position.set(0, y, depth/2); group.add(r2);
+                const r3 = new THREE.Mesh(sideRailGeo, MAT.safetyYellow); r3.rotation.x = Math.PI/2; r3.position.set(-width/2, y, 0); group.add(r3);
+                const r4 = r3.clone(); r4.position.set(width/2, y, 0); group.add(r4);
+            });
+            return group;
+        }
+
+        function addLabel(group, text, height) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.innerHTML = text;
+            const label = new CSS2DObject(div);
+            label.position.set(0, height, 0);
+            group.add(label);
+        }
+
+        const modules = {};
+        const flowParticles = []; // For animating water flow
+
+        // --- STAGE 1: Membrane Filtration ---
+        function buildMembrane(x) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, 0);
+            group.userData.moduleName = 'membrane'; // For raycasting
+            group.add(createPad(14, 10));
+            
+            const frame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(12, 6, 8)), new THREE.LineBasicMaterial({ color: 0x64748b }));
+            frame.position.y = 3;
+            group.add(frame);
+
+            const vesselOuterGeo = new THREE.CylinderGeometry(1.0, 1.0, 10, 32);
+            vesselOuterGeo.rotateZ(Math.PI / 2);
+            const capGeo = new THREE.SphereGeometry(1.0, 32, 16, 0, Math.PI * 2, 0, Math.PI/2);
+            capGeo.rotateZ(-Math.PI / 2);
+
+            const membraneCoreGeo = new THREE.CylinderGeometry(0.2, 0.2, 8, 16);
+            const membraneSheetGeo = new THREE.BoxGeometry(0.1, 1.5, 7);
+            
+            for(let y=0; y<2; y++) {
+                for(let z=0; z<2; z++) {
+                    const elementGroup = new THREE.Group();
+                    elementGroup.position.set(0, 2.5 + y*2.5, -2 + z*4);
+                    
+                    const vessel = new THREE.Mesh(vesselOuterGeo, MAT.membraneVessel.clone());
+                    vessel.castShadow = true;
+                    vessel.name = "membrane_vessel";
+                    elementGroup.add(vessel);
+                    
+                    const capL = new THREE.Mesh(capGeo, MAT.darkSteel); capL.position.x = -5; capL.rotation.z = -Math.PI/2; vessel.add(capL);
+                    const capR = new THREE.Mesh(capGeo, MAT.darkSteel); capR.position.x = 5; capR.rotation.z = Math.PI/2; vessel.add(capR);
+
+                    const core = new THREE.Mesh(membraneCoreGeo, MAT.darkSteel);
+                    core.position.x = 0;
+                    core.name = "membrane_core";
+                    core.visible = false;
+                    elementGroup.add(core);
+
+                    for(let i=0; i<4; i++) {
+                        const sheet = new THREE.Mesh(membraneSheetGeo, MAT.membraneElement);
+                        sheet.rotation.y = (Math.PI / 2) * i;
+                        sheet.position.x = 0;
+                        sheet.name = "membrane_sheet";
+                        sheet.visible = false;
+                        elementGroup.add(sheet);
+                    }
+
+                    // Feed inlet
+                    const feedInlet = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.5), MAT.feedWater);
+                    feedInlet.position.set(-5.3, 0, 0); feedInlet.rotation.z = Math.PI / 2; feedInlet.name = "membrane_feed_inlet";
+                    feedInlet.visible = false;
+                    elementGroup.add(feedInlet);
+
+                    // Filtrate outlet
+                    const filtrateOutlet = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.5), MAT.filtrateWater);
+                    filtrateOutlet.position.set(0, -0.6, 0); filtrateOutlet.rotation.x = Math.PI / 2; filtrateOutlet.name = "membrane_filtrate_outlet";
+                    filtrateOutlet.visible = false;
+                    elementGroup.add(filtrateOutlet);
+
+                    // Concentrate outlet
+                    const concentrateOutlet = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.5), MAT.concentrateWater);
+                    concentrateOutlet.position.set(5.3, 0, 0); concentrateOutlet.rotation.z = Math.PI / 2; concentrateOutlet.name = "membrane_concentrate_outlet";
+                    concentrateOutlet.visible = false;
+                    elementGroup.add(concentrateOutlet);
+
+                    group.add(elementGroup);
+                }
+            }
+            
+            addLabel(group, "STAGE 1: MEMBRANE FILTRATION\n<span style='font-size:10px; color:#94a3b8'>Removes particles & pathogens</span>", 9);
+            scene.add(group);
+            modules.membrane = group;
+        }
+
+        // --- STAGE 2: Nutrient Removal ---
+        function buildBioreactor(x) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, 0);
+            group.userData.moduleName = 'bio';
+
+            const width = 14, height = 7, depth = 12;
+            const wallThick = 0.5;
+            
+            const wallGeo = new THREE.BoxGeometry(width, height, wallThick);
+            const wall1 = new THREE.Mesh(wallGeo, MAT.concrete.clone()); wall1.position.z = -depth/2; wall1.position.y = height/2; wall1.name = 'bio_wall_z1'; group.add(wall1);
+            const wall2 = wall1.clone(); wall2.position.z = depth/2; wall2.name = 'bio_wall_z2'; group.add(wall2);
+
+            const sideWallGeo = new THREE.BoxGeometry(wallThick, height, depth);
+            const wall3 = new THREE.Mesh(sideWallGeo, MAT.concrete.clone()); wall3.position.x = -width/2; wall3.position.y = height/2; wall3.name = 'bio_wall_x1'; group.add(wall3);
+            const wall4 = wall3.clone(); wall4.position.x = width/2; wall4.name = 'bio_wall_x2'; group.add(wall4);
+
+            const waterGeo = new THREE.BoxGeometry(width-1, height-1, depth-1);
+            const water = new THREE.Mesh(waterGeo, MAT.water);
+            water.position.y = (height-1)/2 + 0.5;
+            water.name = "bio_water";
+            group.add(water);
+
+            const rail = createRailing(width, depth); rail.position.y = height; group.add(rail);
+            const bridge = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, depth+2), MAT.steel); bridge.position.y = height; group.add(bridge);
+
+            const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 6), MAT.darkSteel); shaft.position.y = -2; bridge.add(shaft);
+            const blade = new THREE.Mesh(new THREE.BoxGeometry(3, 0.1, 0.5), MAT.steel); blade.position.y = -3; blade.name = "mixer_blade"; shaft.add(blade);
+
+            addLabel(group, "STAGE 2: NUTRIENT REMOVAL\n<span style='font-size:10px; color:#94a3b8'>Removes Nitrogen & Phosphorus</span>", 10);
+            scene.add(group);
+            modules.bio = group;
+        }
+
+        // --- STAGE 3: UV Treatment ---
+        function buildUV(x) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, 0);
+            group.userData.moduleName = 'uv';
+            group.add(createPad(8, 14));
+
+            const floor = new THREE.Mesh(new THREE.BoxGeometry(6, 0.5, 12), MAT.steel); floor.position.y = 1; floor.receiveShadow = true; group.add(floor);
+            const wallL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4, 12), MAT.steel.clone()); wallL.position.set(-2.75, 3, 0); wallL.receiveShadow = true; wallL.name = 'uv_wall_L'; group.add(wallL);
+            const wallR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4, 12), MAT.steel.clone()); wallR.position.set(2.75, 3, 0); wallR.receiveShadow = true; wallR.name = 'uv_wall_R'; group.add(wallR);
+
+            for(let i=0; i<3; i++) {
+                const bank = new THREE.Group(); bank.position.set(0, 2.5, -4 + i*4);
+                const hanger = new THREE.Mesh(new THREE.BoxGeometry(5, 0.2, 0.5), MAT.darkSteel); hanger.position.y = 1.5; bank.add(hanger);
+                const tubeGeo = new THREE.CylinderGeometry(0.1, 0.1, 2.5);
+                const tubeMat = new THREE.MeshStandardMaterial({ color: 0x8800ff, emissive: 0x4400aa, emissiveIntensity: 0 });
+                for(let t=0; t<4; t++) {
+                    const tube = new THREE.Mesh(tubeGeo, tubeMat.clone()); tube.rotation.z = Math.PI/2; tube.position.y = -0.5 - (t*0.5);
+                    tube.name = `uv_tube_${i}_${t}`; bank.add(tube);
+                }
+                group.add(bank);
+            }
+            const water = new THREE.Mesh(new THREE.BoxGeometry(5.4, 2.5, 12), MAT.water); water.position.y = 2.25; water.name = 'uv_water'; group.add(water);
+
+            addLabel(group, "STAGE 3: UV TREATMENT\n<span style='font-size:10px; color:#94a3b8'>Disinfects bacteria & viruses</span>", 7);
+            scene.add(group);
+            modules.uv = group;
+        }
+
+        // --- STAGE 4: Advanced Oxidation (AOP) ---
+        function buildAOP(x) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, 0);
+            group.userData.moduleName = 'aop';
+            group.add(createPad(8, 8));
+
+            const tower = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 10, 32), MAT.aopTower.clone());
+            tower.position.y = 5; 
+            tower.castShadow = true; 
+            tower.name = 'aop_tower';
+            group.add(tower);
+            
+            const windowGeo = new THREE.CylinderGeometry(2.55, 2.55, 2, 32, 1, true, 0, Math.PI/2);
+            const windowFrame = new THREE.Mesh(windowGeo, MAT.glass); windowFrame.position.y = 5; windowFrame.rotation.y = -Math.PI/4; group.add(windowFrame);
+            
+            const coreGeo = new THREE.CylinderGeometry(2.4, 2.4, 2, 16, 1, false, 0, Math.PI/2);
+            const core = new THREE.Mesh(coreGeo, new THREE.MeshBasicMaterial({ color: 0x00ffff }));
+            core.position.y = 5; core.rotation.y = -Math.PI/4; core.name = "aop_core"; group.add(core);
+
+            addLabel(group, "STAGE 4: ADVANCED OXIDATION\n<span style='font-size:10px; color:#94a3b8'>Removes trace contaminants</span>", 11);
+            scene.add(group);
+            modules.aop = group;
+        }
+
+        function connect(m1, m2) {
+            if(!m1 || !m2) return;
+            const startX = m1.userData.moduleName === 'membrane' ? m1.position.x + 6 : m1.position.x + 4;
+            const endX = m2.userData.moduleName === 'membrane' ? m2.position.x - 6 : m2.position.x - 4;
+
+            const start = new THREE.Vector3(startX, 1, 0);
+            const end = new THREE.Vector3(endX, 1, 0);
+            const dist = start.distanceTo(end);
+            
+            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, dist), MAT.pipe);
+            pipe.rotation.z = Math.PI/2; pipe.position.copy(start.lerp(end, 0.5)); pipe.castShadow = true; scene.add(pipe);
+            
+            const flangeGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.2);
+            const f1 = new THREE.Mesh(flangeGeo, MAT.darkSteel); f1.rotation.z = Math.PI/2; f1.position.copy(new THREE.Vector3(m1.position.x + 6, 1, 0)); scene.add(f1);
+            const f2 = f1.clone(); f2.position.copy(new THREE.Vector3(m2.position.x - 6, 1, 0)); scene.add(f2);
+        }
+
+        // --- Build Sequence ---
+        buildMembrane(-45);
+        buildBioreactor(-15);
+        buildUV(15);
+        buildAOP(45);
+
+        connect(modules.membrane, modules.bio);
+        connect(modules.bio, modules.uv);
+        connect(modules.uv, modules.aop);
+
+        // --- INTERACTIVITY SETUP ---
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        let targetModule = null;
+
+        const defaultCamPos = new THREE.Vector3(0, 45, 90);
+        const defaultLookAt = new THREE.Vector3(0, 0, 0);
+
+        const moduleZoomPositions = {
+            membrane: { pos: new THREE.Vector3(-45, 10, 20), target: new THREE.Vector3(-45, 3, 0) },
+            bio: { pos: new THREE.Vector3(-15, 12, 30), target: new THREE.Vector3(-15, 5, 0) },
+            uv: { pos: new THREE.Vector3(15, 8, 20), target: new THREE.Vector3(15, 3, 0) },
+            aop: { pos: new THREE.Vector3(45, 10, 25), target: new THREE.Vector3(45, 5, 0) }
+        };
+
+        function onPointerClick(event) {
+            pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+            pointer.y = - (event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(pointer, camera);
+            const intersectableObjects = [modules.membrane, modules.bio, modules.uv, modules.aop];
+            const intersects = raycaster.intersectObjects(intersectableObjects, true);
+
+            if (intersects.length > 0) {
+                const clickedObject = intersects[0].object;
+                let parentModule = clickedObject;
+                while (parentModule && parentModule !== scene) {
+                    if (parentModule.userData.moduleName) {
+                        break;
+                    }
+                    parentModule = parentModule.parent;
+                }
+
+                if (parentModule && parentModule.userData.moduleName) {
+                    const moduleName = parentModule.userData.moduleName;
+                    if (targetModule === moduleName) {
+                        targetModule = null; 
+                    } else {
+                        targetModule = moduleName; 
+                    }
+                }
+            } else {
+                targetModule = null;
+            }
+        }
+
+        window.addEventListener('click', onPointerClick);
+
+        // --- Logic & Animation ---
+        const state = { flow: 0.5, dose: 0.5, uv: false, time: 0 };
+
+        // Event listeners for UI controls...
+        const flowInput = document.getElementById('input-flow');
+        if(flowInput) flowInput.addEventListener('input', (e) => { 
+            state.flow = e.target.value / 100; 
+            document.getElementById('val-flow').innerText = e.target.value + " m³/h"; 
+        });
+        
+        const doseInput = document.getElementById('input-dose');
+        if(doseInput) doseInput.addEventListener('input', (e) => { 
+            state.dose = e.target.value / 100; 
+            document.getElementById('val-dose').innerText = e.target.value + "%"; 
+        });
+
+        const uvBtn = document.getElementById('btn-uv');
+        if(uvBtn) uvBtn.addEventListener('click', (e) => {
+            state.uv = !state.uv;
+            e.target.classList.toggle('text-purple-300');
+            e.target.classList.toggle('text-white');
+            e.target.classList.toggle('bg-purple-500');
+            e.target.innerText = state.uv ? "UV ONLINE" : "UV POWER";
+        });
+
+        const resetBtn = document.getElementById('btn-reset');
+        if(resetBtn) resetBtn.addEventListener('click', () => {
+            targetModule = null;
+        });
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+            state.time += dt;
+
+            // FIX: 360 DEGREE FREEDOM
+            // We only move the camera automatically if a module is targeted (zooming in).
+            // When targetModule is null, we STOP forcing camera.position, allowing OrbitControls to work freely.
+            
+            let targetLookAt = defaultLookAt;
+
+            if (targetModule && moduleZoomPositions[targetModule]) {
+                const zoomPos = moduleZoomPositions[targetModule].pos;
+                const zoomTarget = moduleZoomPositions[targetModule].target;
+                
+                // Move camera towards the zoom position
+                camera.position.lerp(zoomPos, 0.05);
+                // Aim camera at the module
+                controls.target.lerp(zoomTarget, 0.05);
+            } else {
+                // When resetting/default:
+                // 1. We do NOT lerp camera.position. This lets the user rotate 360 freely.
+                // 2. We DO lerp controls.target back to center (0,0,0) so rotation happens around the plant.
+                controls.target.lerp(defaultLookAt, 0.05);
+            }
+            
+            controls.update();
+
+            // --- Animate Modules and Internal Reveal Logic ---
+            const isZoomed = targetModule !== null;
+            const flowSpeed = state.flow * 0.1 + 0.01;
+
+            if (modules.membrane) {
+                modules.membrane.traverse(c => {
+                    const isModuleActive = targetModule === 'membrane';
+                    if (c.name === 'membrane_vessel') {
+                        c.material.transparent = isModuleActive;
+                        c.material.opacity = isModuleActive ? 0.1 : 1.0;
+                        c.material.needsUpdate = true;
+                    }
+                    if (c.name.includes('membrane_core') || c.name.includes('membrane_sheet')) {
+                        c.visible = isModuleActive;
+                    }
+                    if (c.name.includes('membrane_feed_inlet') || c.name.includes('membrane_filtrate_outlet') || c.name.includes('membrane_concentrate_outlet')) {
+                         c.visible = isModuleActive;
+                    }
+                });
+                
+                // Particles logic...
+                if (targetModule === 'membrane') {
+                     if (Math.random() < flowSpeed * 5) {
+                        const particle = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), MAT.feedWater);
+                        const elementGroups = modules.membrane.children.filter(child => child.isGroup && child.position.y > 0);
+                        if (elementGroups.length > 0) {
+                            const randomElement = elementGroups[Math.floor(Math.random() * elementGroups.length)];
+                            const inlet = randomElement.getObjectByName("membrane_feed_inlet");
+                            if (inlet) {
+                                particle.position.copy(inlet.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(-0.5, 0, 0)));
+                                particle.userData.velocity = new THREE.Vector3(flowSpeed * 1.5, 0, 0); 
+                                particle.userData.flowType = 'feed';
+                                particle.userData.parentModuleX = modules.membrane.position.x;
+                                scene.add(particle);
+                                flowParticles.push(particle);
+                            }
+                        }
+                    }
+                    for (let i = flowParticles.length - 1; i >= 0; i--) {
+                        const particle = flowParticles[i];
+                        if (particle.userData.flowType === 'feed') {
+                            particle.position.x += particle.userData.velocity.x;
+                            if (particle.position.x > particle.userData.parentModuleX + 0.5) {
+                                if (Math.random() < 0.7) {
+                                    particle.material = MAT.filtrateWater;
+                                    particle.userData.velocity.set(0, -flowSpeed, 0); 
+                                    particle.userData.flowType = 'filtrate';
+                                } else {
+                                    particle.material = MAT.concentrateWater;
+                                    particle.userData.velocity.set(flowSpeed * 1.2, 0, 0); 
+                                    particle.userData.flowType = 'concentrate';
+                                }
+                            }
+                        } else if (particle.userData.flowType === 'filtrate') {
+                            particle.position.y += particle.userData.velocity.y;
+                        } else if (particle.userData.flowType === 'concentrate') {
+                            particle.position.x += particle.userData.velocity.x;
+                        }
+                        if (particle.position.x > modules.membrane.position.x + 8 || particle.position.y < 0) {
+                            scene.remove(particle);
+                            flowParticles.splice(i, 1);
+                        }
+                    }
+                } else {
+                    flowParticles.forEach(p => scene.remove(p));
+                    flowParticles.length = 0;
+                }
+            }
+
+            const mixer = modules.bio.getObjectByName('mixer_blade');
+            if (mixer) mixer.rotation.y += (1 + state.flow * 2) * dt;
+            const bioWater = modules.bio.getObjectByName('bio_water');
+            if (bioWater) bioWater.material.color.setHSL(0.08 + (state.flow*0.02), 0.6, 0.3);
+            if (modules.bio) {
+                modules.bio.traverse(c => {
+                    if (c.name.includes('bio_wall')) {
+                        const isModuleActive = targetModule === 'bio';
+                        c.material.transparent = isModuleActive;
+                        c.material.opacity = isModuleActive ? 0.3 : 1.0;
+                        c.material.needsUpdate = true;
+                    }
+                });
+            }
+
+            if(modules.uv) {
+                modules.uv.traverse(c => {
+                    if(c.name.includes('uv_tube')) c.material.emissiveIntensity = state.uv ? 2 + Math.sin(state.time*10)*0.2 : 0;
+                    if (c.name.includes('uv_wall')) { 
+                        const isModuleActive = targetModule === 'uv';
+                        c.material.transparent = isModuleActive;
+                        c.material.opacity = isModuleActive ? 0.3 : 1.0;
+                        c.material.needsUpdate = true;
+                    }
+                });
+            }
+
+            const aopCore = modules.aop.getObjectByName('aop_core');
+            if (aopCore) aopCore.material.color.setHSL(0.5, 1, 0.5 + Math.sin(state.time*5)*0.1 * (state.dose + 0.5));
+            if (modules.aop) {
+                 modules.aop.traverse(c => {
+                    if (c.name === 'aop_tower') { 
+                        const isModuleActive = targetModule === 'aop';
+                        c.material.transparent = isModuleActive;
+                        c.material.opacity = isModuleActive ? 0.1 : 1.0;
+                        c.material.needsUpdate = true;
+                    }
+                });
+            }
+
+            if (renderer) renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        // Init
+        const loader = document.getElementById('loader');
+        if (loader) {
+            loader.style.opacity = 0;
+            setTimeout(() => {
+                if (loader && loader.parentNode) loader.remove();
+            }, 800);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            if(renderer) renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

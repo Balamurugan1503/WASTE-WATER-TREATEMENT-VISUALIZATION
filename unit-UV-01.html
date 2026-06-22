@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UV Disinfection Digital Twin (Final)</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@300;400;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0b0e14;
+            --bg-panel: #151921;
+            --accent-blue: #00d2ff;
+            --accent-green: #00ff9d;
+            --accent-danger: #ff4444;
+            --text-main: #e0f2fe;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --font-display: 'Rajdhani', sans-serif;
+            --font-mono: 'Roboto Mono', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-dark); color: var(--text-main); font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+
+        .btn {
+            background: rgba(0, 210, 255, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue);
+            padding: 12px 24px; border-radius: 4px; cursor: pointer; font-family: var(--font-display);
+            font-weight: 700; text-transform: uppercase; letter-spacing: 1px; transition: all 0.2s;
+        }
+        .btn:hover { background: var(--accent-blue); color: #000; box-shadow: 0 0 15px var(--accent-blue); }
+
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s ease; }
+        .modal.active { display: flex; opacity: 1; }
+
+        .sim-layout { width: 100%; height: 100%; display: grid; grid-template-columns: 350px 1fr 350px; }
+        .sim-sidebar { background: var(--bg-panel); border-right: 1px solid var(--border); padding: 25px; display: flex; flex-direction: column; overflow-y: auto; z-index: 10; }
+        .sim-sidebar.right { border-left: 1px solid var(--border); border-right: none; }
+        
+        h2 { font-family: var(--font-display); font-size: 1.8rem; color: #fff; margin-bottom: 5px; }
+        h3 { font-family: var(--font-display); font-size: 1.2rem; color: #fff; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 25px; }
+
+        .control-group { margin-bottom: 25px; }
+        .control-label { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 10px; color: var(--text-muted); }
+        .control-val { font-family: var(--font-mono); color: var(--accent-blue); }
+
+        input[type=range] { width: 100%; -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-blue); cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px var(--accent-blue); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #334155; border-radius: 2px; }
+
+        .output-box { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 15px; margin-top: auto; }
+        .output-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; }
+        .output-val { font-family: var(--font-mono); color: #fff; }
+
+        .sim-canvas-container { position: relative; width: 100%; height: 100%; background: radial-gradient(circle at center, #051015 0%, #000 100%); }
+        .close-sim { position: absolute; top: 20px; right: 20px; z-index: 20; background: rgba(0,0,0,0.5); border: 1px solid #fff; color: #fff; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: 0.2s; }
+        .close-sim:hover { background: var(--accent-danger); border-color: var(--accent-danger); }
+        .flex-gap { display: flex; gap: 10px; }
+        .w-full { width: 100%; }
+    </style>
+</head>
+<body>
+
+    <div style="text-align: center;">
+        <h1 style="font-family: var(--font-display); font-size: 3rem; margin-bottom: 10px;">Tertiary Treatment</h1>
+        <p style="color: var(--text-muted); margin-bottom: 30px;">Unit Operation: UV Disinfection (Stage 3)</p>
+        <button class="btn" onclick="openSim()">Launch Simulator</button>
+    </div>
+
+    <div id="modal-screen" class="modal">
+        <button class="close-sim" onclick="closeSim()">✕</button>
+        
+        <div class="sim-layout">
+            <div class="sim-sidebar">
+                <h2>UV Reactor Chamber</h2>
+                <p class="subtitle">Physics: UV Intensity, Exposure & Log Inactivation</p>
+                
+                <div class="control-group">
+                    <div class="control-label"><span>Target UV Dose (mJ/cm²)</span> <span id="val-uv-dose" class="control-val">25</span></div>
+                    <input type="range" id="inp-uv-dose" min="5" max="50" value="25" step="1">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Lamp Power (Watts)</span> <span id="val-uv-power" class="control-val">1000</span></div>
+                    <input type="range" id="inp-uv-power" min="500" max="3000" value="1000" step="100">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Contact Time (s)</span> <span id="val-uv-time" class="control-val">30</span></div>
+                    <input type="range" id="inp-uv-time" min="10" max="60" value="30" step="1">
+                </div>
+
+                <div class="flex-gap">
+                    <button class="btn w-full" onclick="runPhysics()">Update Physics</button>
+                    <button class="btn w-full" style="border-color:#555; color:#aaa" onclick="resetSim()">Reset</button>
+                </div>
+
+                <div class="output-box">
+                    <div class="output-row"><span>Delivered Dose:</span> <span id="out-uv-dose" class="output-val" style="color:var(--accent-blue)">-- mJ/cm²</span></div>
+                    <div class="output-row"><span>Log Inactivation:</span> <span id="out-uv-log" class="output-val">--</span></div>
+                    <div class="output-row"><span>% Kill:</span> <span id="out-uv-kill" class="output-val" style="color:var(--accent-green)">--%</span></div>
+                    <div class="output-row"><span>UV Intensity:</span> <span id="out-uv-int" class="output-val">-- mW/cm²</span></div>
+                    
+                    <div class="output-row" style="margin-top:10px; border-top:1px dashed #444; padding-top:10px;">
+                        <span id="out-uv-status" style="font-size:0.8em; line-height:1.4">Initializing...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sim-canvas-container" id="container-uv">
+                </div>
+            
+            <div class="sim-sidebar right">
+                <h3>Disinfection Efficiency</h3>
+                <canvas id="chart-uv" height="250"></canvas>
+                
+                <div style="margin-top:20px; font-size:0.85rem; color:var(--text-muted); line-height: 1.6;">
+                    <strong>Visual Guide:</strong><br>
+                    Watch microbes flow from left to right.<br>
+                    <span style="color:#00ff55">● Green (Alive):</span> Entering chamber.<br>
+                    <span style="color:#ffaa00">● Yellow (Dying):</span> Absorbing UV dose.<br>
+                    <span style="color:#00ffff">● Cyan/White (Dead):</span> Inactivated (>30 mJ/cm²).
+                </div>
+                
+                <div style="margin-top:20px;">
+                    <button class="btn w-full" style="font-size:0.8rem" onclick="toggleXRay()">Toggle X-Ray View</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+const DEFAULTS = { dose: 25, power: 1000, time: 30 };
+let sceneManager = null;
+let performanceChart = null;
+
+class UVSimulator {
+    constructor(containerId) {
+        this.container = document.getElementById(containerId);
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        
+        this.scene = new THREE.Scene();
+        // Volumetric fog inside the channel (Blue/Green tint)
+        this.scene.fog = new THREE.FogExp2(0x002233, 0.08);
+
+        this.camera = new THREE.PerspectiveCamera(50, this.width / this.height, 0.1, 100);
+        this.camera.position.set(6, 5, 9); 
+        this.camera.lookAt(0, 0, 0);
+        
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(this.width, this.height);
+        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.container.appendChild(this.renderer.domElement);
+        
+        // Lighting
+        const ambient = new THREE.AmbientLight(0x004466, 0.6);
+        this.scene.add(ambient);
+        
+        const spotLight = new THREE.SpotLight(0x00ffff, 1.2);
+        spotLight.position.set(0, 10, 0);
+        this.scene.add(spotLight);
+
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+
+        this.objects = {};
+        this.simState = { xray: false }; 
+        this.simParams = { ...DEFAULTS };
+
+        this.initGeometry();
+        this.initParticles();
+        
+        window.addEventListener('resize', () => this.resize());
+        this.animate = this.animate.bind(this);
+        requestAnimationFrame(this.animate);
+    }
+
+    initGeometry() {
+        this.uvGroup = new THREE.Group();
+        this.scene.add(this.uvGroup);
+
+        // 1. Channel Walls (BackFace culling inverted to see inside)
+        const channelGeo = new THREE.BoxGeometry(12, 3, 5);
+        channelGeo.scale(-1, 1, 1);
+        const concreteMat = new THREE.MeshStandardMaterial({ 
+            color: 0x222222, roughness: 0.9, side: THREE.BackSide 
+        });
+        const channel = new THREE.Mesh(channelGeo, concreteMat);
+        channel.position.y = 1.5;
+        this.uvGroup.add(channel);
+        this.objects.channel = channel;
+
+        // 2. Water Volume
+        const waterGeo = new THREE.BoxGeometry(12, 2.8, 4.8);
+        const waterMat = new THREE.MeshPhysicalMaterial({
+            color: 0x0088ff,
+            transmission: 0.8, 
+            opacity: 0.5, 
+            transparent: true,
+            roughness: 0.1, 
+            metalness: 0.1, 
+            ior: 1.33,
+            depthWrite: false // Crucial for transparency sorting with particles
+        });
+        this.objects.water = new THREE.Mesh(waterGeo, waterMat);
+        this.objects.water.position.y = 1.4;
+        this.uvGroup.add(this.objects.water);
+
+        // 3. Lamps and Halos
+        this.objects.lamps = [];
+        this.objects.halos = [];
+        
+        const lampGeo = new THREE.CylinderGeometry(0.08, 0.08, 4.6, 16);
+        lampGeo.rotateX(Math.PI/2);
+        
+        this.lampMat = new THREE.MeshStandardMaterial({ 
+            color: 0xffffff, emissive: 0x00ffff, emissiveIntensity: 1.0 
+        });
+
+        const haloGeo = new THREE.CylinderGeometry(0.6, 0.6, 4.6, 16);
+        haloGeo.rotateX(Math.PI/2);
+        const haloMat = new THREE.MeshBasicMaterial({
+            color: 0x00ffff, transparent: true, opacity: 0.15,
+            blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false
+        });
+
+        // 3 Banks of lamps
+        const xStart = -3;
+        const xSpace = 3;
+        for(let bank=0; bank<3; bank++) {
+            for(let row=0; row<4; row++) {
+                const lamp = new THREE.Mesh(lampGeo, this.lampMat);
+                lamp.position.set(xStart + (bank*xSpace), 0.5 + (row*0.5), 0);
+                this.uvGroup.add(lamp);
+                this.objects.lamps.push(lamp);
+
+                // Add PointLights
+                const light = new THREE.PointLight(0x00ffff, 0.6, 3);
+                light.position.copy(lamp.position);
+                this.uvGroup.add(light);
+
+                // Add Kill Zone Halo
+                const halo = new THREE.Mesh(haloGeo, haloMat.clone());
+                halo.position.copy(lamp.position);
+                this.uvGroup.add(halo);
+                this.objects.halos.push(halo);
+            }
+        }
+    }
+
+    createGlowTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 32; canvas.height = 32;
+        const ctx = canvas.getContext('2d');
+        const grd = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+        grd.addColorStop(0, 'rgba(255,255,255,1)');
+        grd.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+        grd.addColorStop(0.5, 'rgba(255,255,255,0.2)');
+        grd.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, 32, 32);
+        return new THREE.CanvasTexture(canvas);
+    }
+
+    initParticles() {
+        const count = 2000;
+        const positions = new Float32Array(count * 3);
+        const colors = new Float32Array(count * 3);
+        this.particleDoses = new Float32Array(count); 
+
+        for(let i=0; i<count; i++) this.resetParticle(i, positions, colors);
+        
+        const pGeo = new THREE.BufferGeometry();
+        pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        pGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const pMat = new THREE.PointsMaterial({
+            size: 0.2, 
+            vertexColors: true, 
+            map: this.createGlowTexture(),
+            transparent: true, 
+            opacity: 0.9, 
+            blending: THREE.AdditiveBlending, 
+            depthWrite: false
+        });
+
+        this.objects.particles = new THREE.Points(pGeo, pMat);
+        this.uvGroup.add(this.objects.particles);
+    }
+
+    resetParticle(i, posArr, colArr) {
+        posArr[i*3] = -6.0; 
+        posArr[i*3+1] = 0.3 + Math.random() * 2.2; 
+        posArr[i*3+2] = (Math.random() * 4.4) - 2.2;
+        
+        if(this.particleDoses) this.particleDoses[i] = 0;
+        
+        if(colArr) {
+            colArr[i*3] = 0.0;   // R
+            colArr[i*3+1] = 1.0; // G
+            colArr[i*3+2] = 0.3; // B (#00ff55 - Alive Green)
+        }
+    }
+
+    updateConfig(params) {
+        this.simParams = params;
+        const intensityFactor = (params.power / 3000);
+        this.lampMat.emissiveIntensity = 0.5 + (intensityFactor * 3.0);
+        this.objects.halos.forEach(halo => { halo.material.opacity = 0.1 + (intensityFactor * 0.2); });
+    }
+
+    toggleXRay() {
+        this.simState.xray = !this.simState.xray;
+        this.objects.water.material.opacity = this.simState.xray ? 0.1 : 0.6;
+        this.objects.channel.material.wireframe = this.simState.xray;
+    }
+
+    resize() {
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        this.camera.aspect = this.width / this.height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(this.width, this.height);
+    }
+
+    animate() {
+        requestAnimationFrame(this.animate);
+        if(!this.objects.particles) return;
+
+        const positions = this.objects.particles.geometry.attributes.position.array;
+        const colors = this.objects.particles.geometry.attributes.color.array;
+        
+        const dt = 0.016; 
+        // Calibrated speed: 12 units length / time (sec)
+        const speed = (14.0 / (this.simParams.time)) * dt; 
+        const powerFactor = this.simParams.power / 1000;
+
+        // Pulse Halos
+        const pulse = 1 + Math.sin(Date.now() * 0.005) * 0.05;
+        this.objects.halos.forEach(h => h.scale.set(pulse, 1, pulse));
+
+        for(let i=0; i<this.particleDoses.length; i++) {
+            // 1. Move
+            positions[i*3] += speed; 
+            positions[i*3+1] += (Math.random()-0.5)*0.01; // Jitter
+
+            const px = positions[i*3];
+            const py = positions[i*3+1];
+            const pz = positions[i*3+2];
+
+            // 2. Dose Accumulation Logic
+            let localIntensity = 0;
+            // Only check distance if particle is near a lamp bank x-plane (-3, 0, 3)
+            if(px > -4 && px < 4) {
+                // Approximate distance check optimization
+                for(let l=0; l<this.objects.lamps.length; l++) {
+                    const lamp = this.objects.lamps[l];
+                    const dx = px - lamp.position.x;
+                    const dy = py - lamp.position.y;
+                    const dz = pz - lamp.position.z;
+                    const distSq = dx*dx + dy*dy + dz*dz;
+                    
+                    // Inverse Square Law with clamping
+                    if(distSq < 2.0) {
+                        // Boost factor for visual clarity
+                        localIntensity += (powerFactor * 25.0) / (distSq + 0.5);
+                    }
+                }
+            }
+
+            this.particleDoses[i] += localIntensity * dt;
+            const dose = this.particleDoses[i];
+
+            // 3. Color State Machine
+            // Alive (Green) -> Dying (Yellow) -> Dead (Cyan/White)
+            if (dose < 15) {
+                colors[i*3] = 0.0; colors[i*3+1] = 1.0; colors[i*3+2] = 0.3; 
+            } else if (dose >= 15 && dose < 30) {
+                const t = (dose - 15) / 15; 
+                colors[i*3] = t; colors[i*3+1] = 1.0 - (t*0.5); colors[i*3+2] = 0.0; // Gradient to Orange/Yellow
+            } else {
+                colors[i*3] = 0.6; colors[i*3+1] = 1.0; colors[i*3+2] = 1.0; // Cyan/White
+            }
+
+            // Respawn
+            if(positions[i*3] > 6.0) this.resetParticle(i, positions, colors);
+        }
+        
+        // Water Surface Wave
+        this.objects.water.position.y = 1.4 + Math.sin(Date.now() * 0.0015) * 0.03;
+
+        this.objects.particles.geometry.attributes.position.needsUpdate = true;
+        this.objects.particles.geometry.attributes.color.needsUpdate = true;
+        this.controls.update();
+        this.renderer.render(this.scene, this.camera);
+    }
+}
+
+// --- DOM & PHYSICS INTEGRATION ---
+function runPhysics() {
+    const targetDose = parseFloat(document.getElementById('inp-uv-dose').value);
+    const power = parseFloat(document.getElementById('inp-uv-power').value);
+    const time = parseFloat(document.getElementById('inp-uv-time').value);
+
+    // Engineering Formula: Intensity approx (Power in Watts / 1000) for simulation scale
+    // 1000W -> 1.0 mW/cm2 effective avg
+    const intensity = power / 1000; 
+    const deliveredDose = intensity * time;
+    
+    // Log Kill: 40 mJ/cm2 approx 6 log for this sim
+    let logInactivation = 0.15 * deliveredDose; 
+    if(logInactivation > 6) logInactivation = 6;
+    
+    const percentKill = 100 * (1 - Math.pow(10, -logInactivation));
+
+    // Update DOM
+    document.getElementById('out-uv-dose').innerText = deliveredDose.toFixed(1) + ' mJ/cm²';
+    document.getElementById('out-uv-log').innerText = logInactivation.toFixed(2);
+    document.getElementById('out-uv-kill').innerText = percentKill.toFixed(4) + '%';
+    document.getElementById('out-uv-int').innerText = intensity.toFixed(2) + ' mW/cm²';
+
+    const statusEl = document.getElementById('out-uv-status');
+    let statusText = "• Normal Operation.";
+    let statusColor = "#fff";
+
+    if (deliveredDose < 20) {
+        statusText = "• Low Dose: Pathogens Surviving.";
+        statusColor = "#ff4444";
+    } else if (deliveredDose > 40) {
+        statusText = "• High Dose: Full Disinfection.";
+        statusColor = "#00ff9d";
+    }
+    if(deliveredDose < targetDose) statusText += `<br>• Below Target (${targetDose})`;
+
+    statusEl.innerHTML = statusText;
+    statusEl.style.color = statusColor;
+
+    if(sceneManager) sceneManager.updateConfig({ dose: targetDose, power, time });
+    updateChart(deliveredDose);
+}
+
+function updateChart(dose) {
+    if(!performanceChart) return;
+    const data = performanceChart.data.datasets[0].data;
+    const labels = performanceChart.data.labels;
+    if(data.length > 20) { data.shift(); labels.shift(); }
+    labels.push(new Date().toLocaleTimeString());
+    data.push(Math.max(0, dose + (Math.random()-0.5)));
+    performanceChart.update();
+}
+
+function initChart() {
+    const ctx = document.getElementById('chart-uv').getContext('2d');
+    performanceChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Delivered Dose (mJ/cm²)', borderColor: '#00d2ff', backgroundColor: 'rgba(0, 210, 255, 0.1)', data: [], fill: true, tension: 0.4 }] },
+        options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { labels:{color:'#fff'} } }, scales: { y: { grid:{color:'#333'}, title: {display: true, text: 'Dose', color: '#888'}, min: 0 }, x: { display: false } } }
+    });
+}
+
+function openSim() {
+    document.getElementById('modal-screen').classList.add('active');
+    if(!sceneManager) {
+        setTimeout(() => {
+            sceneManager = new UVSimulator('container-uv');
+            initChart();
+            runPhysics();
+            ['inp-uv-dose', 'inp-uv-power', 'inp-uv-time'].forEach(id => {
+                document.getElementById(id).addEventListener('input', (e) => {
+                    document.getElementById(id.replace('inp', 'val')).innerText = e.target.value;
+                    runPhysics();
+                });
+            });
+            // Background update loop for chart
+            setInterval(() => {
+                const p = parseFloat(document.getElementById('inp-uv-power').value);
+                const t = parseFloat(document.getElementById('inp-uv-time').value);
+                const dose = (p / 1000) * t; 
+                updateChart(dose);
+            }, 1000);
+        }, 100);
+    }
+}
+
+function closeSim() { document.getElementById('modal-screen').classList.remove('active'); }
+function resetSim() {
+    document.getElementById('inp-uv-dose').value = DEFAULTS.dose;
+    document.getElementById('inp-uv-power').value = DEFAULTS.power;
+    document.getElementById('inp-uv-time').value = DEFAULTS.time;
+    document.getElementById('val-uv-dose').innerText = DEFAULTS.dose;
+    document.getElementById('val-uv-power').innerText = DEFAULTS.power;
+    document.getElementById('val-uv-time').innerText = DEFAULTS.time;
+    runPhysics();
+}
+function toggleXRay() { if(sceneManager) sceneManager.toggleXRay(); }
+</script>
+</body>
+</html>

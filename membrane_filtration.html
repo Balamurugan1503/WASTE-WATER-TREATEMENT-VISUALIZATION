@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Membrane Filtration Digital Twin</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            /* Professional Engineering Palette */
+            --bg-deep: #0a0c10;
+            --panel-bg: rgba(18, 22, 28, 0.9);
+            --border-color: rgba(64, 158, 255, 0.2);
+            --accent-blue: #00bcd4; /* Permeate/Clean */
+            --accent-red: #ff5252;   /* Reject/Dirty */
+            --accent-green: #69f0ae; /* Optimal */
+            --text-main: #e0e6ed;
+            --text-muted: #94a3b8;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: 320px 1fr 340px;
+        }
+
+        /* Typography */
+        h2 { 
+            font-family: 'Rajdhani', sans-serif; 
+            font-weight: 700; 
+            color: var(--accent-blue); 
+            text-transform: uppercase; 
+            letter-spacing: 1px; 
+            margin-bottom: 5px; 
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+        h3 { 
+            font-family: 'Rajdhani', sans-serif; 
+            font-size: 1rem; 
+            color: var(--text-muted); 
+            margin-top: 15px; 
+            margin-bottom: 10px; 
+        }
+
+        /* Panels */
+        .panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            z-index: 10;
+        }
+        .panel-right { border-left: 1px solid var(--border-color); border-right: none; }
+
+        /* Viewport */
+        #viewport {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, #1b2636 0%, #05070a 100%);
+            overflow: hidden;
+        }
+
+        /* Controls */
+        .control-group { margin-bottom: 20px; }
+        .label-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.85rem; color: var(--text-muted); }
+        .val-display { color: var(--accent-blue); font-family: 'Rajdhani', monospace; font-weight: 700; font-size: 1rem; }
+
+        /* Sliders */
+        input[type=range] { width: 100%; -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #2d3748; border-radius: 2px; cursor: pointer; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; background: var(--accent-blue); border-radius: 50%; margin-top: -6px; cursor: pointer; box-shadow: 0 0 10px var(--accent-blue); transition: transform 0.1s; }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        /* Output Box */
+        .output-box {
+            margin-top: auto;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 15px;
+        }
+        .metric-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; }
+        .metric-val { font-family: 'Rajdhani', monospace; font-weight: 700; color: #fff; }
+
+        /* Charts */
+        .chart-container {
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid var(--border-color);
+            height: 160px;
+        }
+
+        /* Buttons */
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        button {
+            background: rgba(0, 188, 212, 0.1);
+            border: 1px solid var(--accent-blue);
+            color: var(--accent-blue);
+            padding: 10px;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s;
+            border-radius: 2px;
+        }
+        button:hover { background: var(--accent-blue); color: #000; }
+        button.secondary { border-color: var(--text-muted); color: var(--text-muted); }
+        button.secondary:hover { background: var(--text-muted); color: #000; }
+
+        /* Overlay */
+        .overlay-label {
+            position: absolute;
+            background: rgba(0,0,0,0.7);
+            border-left: 3px solid var(--accent-blue);
+            padding: 10px;
+            color: white;
+            font-family: 'Rajdhani';
+            pointer-events: none;
+            top: 20px; left: 20px;
+        }
+        .legend-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; }
+    </style>
+</head>
+<body>
+
+    <div class="panel">
+        <h2>Membrane Filtration</h2>
+        <div style="font-size: 0.8rem; color: #aaa; margin-bottom: 20px;">
+            Config: Hollow Fiber (Shell-side Feed)
+        </div>
+
+        <h3>Operating Conditions</h3>
+
+        <div class="control-group">
+            <div class="label-row"><span>Pore Size (µm)</span><span id="disp-pore" class="val-display">0.20</span></div>
+            <input type="range" id="sld-pore" min="0.01" max="1.0" step="0.01" value="0.2">
+            <div style="font-size:0.7rem; color:#666; margin-top:4px;">Affects rejection & flux</div>
+        </div>
+
+        <div class="control-group">
+            <div class="label-row"><span>Trans-Membrane Pressure (bar)</span><span id="disp-pressure" class="val-display">2.5</span></div>
+            <input type="range" id="sld-pressure" min="1" max="5" step="0.1" value="2.5">
+        </div>
+
+        <div class="control-group">
+            <div class="label-row"><span>Membrane Area (m²)</span><span id="disp-area" class="val-display">100</span></div>
+            <input type="range" id="sld-area" min="50" max="300" step="10" value="100">
+        </div>
+
+        <div class="btn-grid">
+            <button onclick="sim.resetFouling()">Chemical Clean</button>
+            <button class="secondary" onclick="sim.toggleXRay()">X-Ray View</button>
+        </div>
+
+        <div class="output-box">
+            <div class="metric-row"><span>Flux (J)</span><span id="out-flux" class="metric-val">0.0 LMH</span></div>
+            <div class="metric-row"><span>Permeate Flow (Q)</span><span id="out-flow" class="metric-val">0.0 m³/h</span></div>
+            <div class="metric-row"><span>Fouling Resistance</span><span id="out-fouling" class="metric-val" style="color:var(--accent-red)">0%</span></div>
+            <div class="metric-row" style="border:none;"><span>Virus Rejection</span><span id="out-rej" class="metric-val">0%</span></div>
+        </div>
+    </div>
+
+    <div id="viewport">
+        <div class="overlay-label">
+            <div style="font-size:1.2rem; font-weight:bold;">PVDF HOLLOW FIBER MODULE</div>
+            <div style="color:var(--text-muted); font-size:0.9rem;">Mode: Outside-In Filtration</div>
+        </div>
+    </div>
+
+    <div class="panel panel-right">
+        <h3>Process Analytics</h3>
+        
+        <div class="label-row">Permeate Flow Rate (m³/h)</div>
+        <div class="chart-container">
+            <canvas id="chartFlow"></canvas>
+        </div>
+
+        <div class="label-row">Particle Rejection Efficiency (%)</div>
+        <div class="chart-container">
+            <canvas id="chartRej"></canvas>
+        </div>
+
+        <div class="label-row">Flux Decline (Fouling)</div>
+        <div class="chart-container">
+            <canvas id="chartFlux"></canvas>
+        </div>
+
+        <div style="font-size:0.8rem; color:#888; margin-top:10px; line-height:1.6;">
+            <strong>Particle Legend:</strong><br>
+            <span class="legend-dot" style="background:var(--accent-red)"></span> <b>Rejected:</b> Large solids (> Pore Size)<br>
+            <span class="legend-dot" style="background:var(--accent-blue)"></span> <b>Permeate:</b> Clean water (< Pore Size)<br>
+            <span class="legend-dot" style="background:#ffffff"></span> <b>Fibers:</b> Porous membrane wall
+        </div>
+    </div>
+
+<script>
+/**
+ * MEMBRANE FILTRATION DIGITAL TWIN
+ * Physics Engine & Visualization
+ */
+class MembraneSimulator {
+    constructor() {
+        // Physics State
+        this.params = {
+            poreSize: 0.2, // microns
+            pressure: 2.5, // bar
+            area: 100,     // m2
+            viscosity: 1.0 // cP (water @ 20C)
+        };
+        
+        this.state = {
+            flux: 0,
+            flow: 0,
+            foulingFactor: 0, // 0 to 1
+            xray: false,
+            time: 0
+        };
+
+        this.particles = [];
+        
+        this.initThree();
+        this.initCharts();
+        this.updatePhysics();
+        this.animate();
+    }
+
+    // --- THREE.JS SETUP ---
+    initThree() {
+        this.container = document.getElementById('viewport');
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+
+        this.scene = new THREE.Scene();
+        // Dark industrial fog
+        this.scene.fog = new THREE.FogExp2(0x05070a, 0.04);
+
+        this.camera = new THREE.PerspectiveCamera(45, this.width / this.height, 0.1, 100);
+        this.camera.position.set(10, 5, 10);
+        this.camera.lookAt(0, 0, 0);
+
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(this.width, this.height);
+        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.container.appendChild(this.renderer.domElement);
+
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+
+        // Lighting
+        const ambient = new THREE.AmbientLight(0x404040, 1.5);
+        this.scene.add(ambient);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(5, 10, 5);
+        this.scene.add(dirLight);
+
+        // Spotlights for Fiber Illumination
+        const spot1 = new THREE.SpotLight(0x00bcd4, 2);
+        spot1.position.set(0, 8, 0);
+        spot1.angle = 0.5;
+        spot1.penumbra = 0.5;
+        this.scene.add(spot1);
+
+        this.buildModule();
+        this.initParticles();
+
+        window.addEventListener('resize', () => {
+            this.width = this.container.clientWidth;
+            this.height = this.container.clientHeight;
+            this.camera.aspect = this.width / this.height;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(this.width, this.height);
+        });
+    }
+
+    buildModule() {
+        this.moduleGroup = new THREE.Group();
+        this.scene.add(this.moduleGroup);
+
+        // 1. Pressure Vessel (Shell) - Glass/Plastic
+        const shellGeo = new THREE.CylinderGeometry(2, 2, 8, 32);
+        // Make it double-sided for inside viewing
+        this.shellMat = new THREE.MeshPhysicalMaterial({
+            color: 0x88ccff,
+            transmission: 0.8,
+            opacity: 0.3,
+            transparent: true,
+            roughness: 0.1,
+            metalness: 0.1,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        this.shell = new THREE.Mesh(shellGeo, this.shellMat);
+        this.shell.rotation.z = Math.PI / 2;
+        this.moduleGroup.add(this.shell);
+
+        // 2. End Caps (Headers)
+        const capGeo = new THREE.CylinderGeometry(2.2, 2.2, 0.5, 32);
+        const capMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.3 });
+        
+        const capL = new THREE.Mesh(capGeo, capMat);
+        capL.rotation.z = Math.PI / 2;
+        capL.position.x = -4.25;
+        this.moduleGroup.add(capL);
+
+        const capR = new THREE.Mesh(capGeo, capMat);
+        capR.rotation.z = Math.PI / 2;
+        capR.position.x = 4.25;
+        this.moduleGroup.add(capR);
+
+        // 3. Hollow Fibers (The Bundle)
+        // Instead of thousands of tubes, we use a textured volume + outer detail fibers
+        const bundleGeo = new THREE.CylinderGeometry(1.6, 1.6, 7.8, 32);
+        this.bundleMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            roughness: 0.9,
+            metalness: 0.0,
+            flatShading: false
+        });
+        // Create vertical stripes texture for fiber look
+        const canvas = document.createElement('canvas');
+        canvas.width = 128; canvas.height = 128;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#eeeeee';
+        ctx.fillRect(0,0,128,128);
+        ctx.fillStyle = '#cccccc';
+        for(let i=0; i<128; i+=4) ctx.fillRect(i, 0, 1, 128);
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(10, 1);
+        this.bundleMat.map = tex;
+
+        this.bundle = new THREE.Mesh(bundleGeo, this.bundleMat);
+        this.bundle.rotation.z = Math.PI / 2;
+        this.moduleGroup.add(this.bundle);
+
+        // 4. Ports
+        const portGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.5);
+        const portIn = new THREE.Mesh(portGeo, capMat);
+        portIn.position.set(-3, 2.5, 0);
+        this.moduleGroup.add(portIn);
+
+        const portOut = new THREE.Mesh(portGeo, capMat);
+        portOut.position.set(3, -2.5, 0);
+        this.moduleGroup.add(portOut);
+    }
+
+    initParticles() {
+        const pCount = 2000;
+        const pPos = new Float32Array(pCount * 3);
+        const pCol = new Float32Array(pCount * 3);
+        const pSize = new Float32Array(pCount); // Size in microns (simulated)
+        const pState = new Float32Array(pCount); // 0=Feed, 1=Permeate, 2=Rejected
+
+        for(let i=0; i<pCount; i++) {
+            this.resetParticle(i, pPos, pCol, pSize, pState);
+        }
+
+        const pGeo = new THREE.BufferGeometry();
+        pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+        pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+        
+        // Simple circle texture
+        const canvas = document.createElement('canvas');
+        canvas.width = 32; canvas.height = 32;
+        const ctx = canvas.getContext('2d');
+        ctx.beginPath();
+        ctx.arc(16,16,14,0,Math.PI*2);
+        ctx.fillStyle = "white";
+        ctx.fill();
+        const tex = new THREE.CanvasTexture(canvas);
+
+        this.pMat = new THREE.PointsMaterial({
+            size: 0.1,
+            vertexColors: true,
+            map: tex,
+            transparent: true,
+            opacity: 0.9,
+            alphaTest: 0.1
+        });
+
+        this.particleSystem = new THREE.Points(pGeo, this.pMat);
+        
+        // Store attributes for updates
+        this.particleSystem.userData = {
+            pos: pPos,
+            col: pCol,
+            size: pSize,
+            state: pState
+        };
+        
+        this.moduleGroup.add(this.particleSystem);
+    }
+
+    resetParticle(i, pos, col, size, state) {
+        // Start at Inlet (Left side, outside bundle)
+        pos[i*3] = -3.8; // X
+        
+        // Random angle and radius in the shell annulus
+        const angle = Math.random() * Math.PI * 2;
+        const r = 1.7 + Math.random() * 0.2; // Between bundle (1.6) and shell (2.0)
+        pos[i*3+1] = Math.cos(angle) * r; // Y
+        pos[i*3+2] = Math.sin(angle) * r; // Z
+
+        // Assign random size: 0.05um (Virus) to 2.0um (Bacteria)
+        // Log-normalish distribution
+        const s = 0.05 + Math.pow(Math.random(), 3) * 1.5;
+        size[i] = s;
+
+        state[i] = 0; // Feed
+
+        // Color based on size (Visual Aid)
+        // Small = Blueish, Large = Reddish
+        if(s > 0.5) { col[i*3]=1; col[i*3+1]=0.6; col[i*3+2]=0.6; } // Dirty
+        else { col[i*3]=0.6; col[i*3+1]=0.8; col[i*3+2]=1; } // Clean-ish
+    }
+
+    // --- PHYSICS ENGINE ---
+    updatePhysics() {
+        // Inputs
+        this.params.poreSize = parseFloat(document.getElementById('sld-pore').value);
+        this.params.pressure = parseFloat(document.getElementById('sld-pressure').value);
+        this.params.area = parseFloat(document.getElementById('sld-area').value);
+
+        // Update Labels
+        document.getElementById('disp-pore').innerText = this.params.poreSize.toFixed(2);
+        document.getElementById('disp-pressure').innerText = this.params.pressure.toFixed(1);
+        document.getElementById('disp-area').innerText = this.params.area;
+
+        // 1. Darcy's Law: Flux J = TMP / (mu * Rm)
+        // Resistance Rm is inverse to pore size squared (simplified Poiseuille)
+        // J scales with Pressure and Pore Size
+        
+        // Fouling Effect
+        this.state.foulingFactor = Math.min(0.9, this.state.foulingFactor + 0.0005); // Increases over time
+        const effectivePore = this.params.poreSize * (1 - this.state.foulingFactor);
+
+        // Base Flux Calculation
+        let J = (this.params.pressure * 20) * (effectivePore / 0.2);
+        this.state.flux = J;
+
+        // 2. Permeate Flow Q = J * A
+        this.state.flow = (J * this.params.area) / 1000; // m3/h
+
+        // 3. Rejection Calculation (for UI)
+        // 0.05um virus vs current pore size
+        const virusSize = 0.05;
+        let rejection = 0;
+        if(effectivePore < virusSize) rejection = 99.9;
+        else if(effectivePore < virusSize * 2) rejection = 50 + (1 - (effectivePore/(virusSize*2)))*49;
+        else rejection = 0;
+
+        // UI Outputs
+        document.getElementById('out-flux').innerText = J.toFixed(1) + " LMH";
+        document.getElementById('out-flow').innerText = this.state.flow.toFixed(2) + " m³/h";
+        document.getElementById('out-fouling').innerText = (this.state.foulingFactor * 100).toFixed(1) + "%";
+        document.getElementById('out-rej').innerText = rejection.toFixed(1) + "%";
+
+        this.updateCharts();
+    }
+
+    animate() {
+        requestAnimationFrame(() => this.animate());
+        this.updatePhysics(); // Continuous update for fouling
+
+        const positions = this.particleSystem.geometry.attributes.position.array;
+        const colors = this.particleSystem.geometry.attributes.color.array;
+        const sizes = this.particleSystem.userData.size;
+        const states = this.particleSystem.userData.state;
+        
+        // Speed proportional to Flux (Pressure)
+        const speed = 0.02 + (this.state.flux / 200) * 0.05; 
+
+        for(let i=0; i<sizes.length; i++) {
+            const px = positions[i*3];
+            const py = positions[i*3+1];
+            const pz = positions[i*3+2];
+            const pSize = sizes[i];
+
+            // State 0: Feed (Shell Side)
+            if(states[i] === 0) {
+                // Move Right (Cross-flow)
+                positions[i*3] += speed; 
+                
+                // Suction force towards center (Filtration)
+                const r = Math.sqrt(py*py + pz*pz);
+                if(r > 1.65) { // If outside bundle
+                    const suction = speed * 0.5;
+                    positions[i*3+1] -= (py/r) * suction;
+                    positions[i*3+2] -= (pz/r) * suction;
+                } else {
+                    // HIT MEMBRANE SURFACE
+                    // Rejection Logic
+                    if(pSize > this.params.poreSize) {
+                        // REJECTED
+                        states[i] = 2; 
+                        // Turn Red
+                        colors[i*3] = 1; colors[i*3+1] = 0.2; colors[i*3+2] = 0.2;
+                    } else {
+                        // PASSED (Permeate)
+                        states[i] = 1;
+                        // Turn Cyan
+                        colors[i*3] = 0; colors[i*3+1] = 1; colors[i*3+2] = 1;
+                    }
+                }
+            }
+            
+            // State 1: Permeate (Inside Bundle)
+            else if (states[i] === 1) {
+                // Move fast to outlet
+                positions[i*3] += speed * 2;
+                // Center vertically
+                positions[i*3+1] *= 0.95;
+                positions[i*3+2] *= 0.95;
+            }
+
+            // State 2: Rejected (Cake Layer)
+            else if (states[i] === 2) {
+                // Stick to surface or drift slowly
+                positions[i*3] += speed * 0.2; // Drag
+                // Jitter on surface (Cake formation visual)
+                positions[i*3] += (Math.random()-0.5)*0.01;
+            }
+
+            // Reset Loop
+            if(px > 3.8) {
+                this.resetParticle(i, positions, colors, sizes, states);
+            }
+        }
+
+        this.particleSystem.geometry.attributes.position.needsUpdate = true;
+        this.particleSystem.geometry.attributes.color.needsUpdate = true;
+
+        this.controls.update();
+        this.renderer.render(this.scene, this.camera);
+    }
+
+    toggleXRay() {
+        this.state.xray = !this.state.xray;
+        
+        if(this.state.xray) {
+            // Transparent Mode
+            this.shellMat.opacity = 0.1;
+            this.bundleMat.wireframe = true;
+            this.bundleMat.opacity = 0.2;
+            this.bundleMat.transparent = true;
+        } else {
+            // Solid Mode
+            this.shellMat.opacity = 0.3;
+            this.bundleMat.wireframe = false;
+            this.bundleMat.opacity = 1.0;
+            this.bundleMat.transparent = false;
+        }
+    }
+
+    resetFouling() {
+        this.state.foulingFactor = 0;
+    }
+
+    // --- CHARTS ---
+    initCharts() {
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.borderColor = 'rgba(255,255,255,0.1)';
+
+        // Chart 1: Flow
+        this.chartFlow = new Chart(document.getElementById('chartFlow'), {
+            type: 'line',
+            data: {
+                labels: Array(20).fill(''),
+                datasets: [{
+                    label: 'Flow (m³/h)',
+                    data: Array(20).fill(0),
+                    borderColor: '#00bcd4',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { min: 0 }, x: { display: false } },
+                animation: { duration: 0 }
+            }
+        });
+
+        // Chart 2: Rejection
+        this.chartRej = new Chart(document.getElementById('chartRej'), {
+            type: 'bar',
+            data: {
+                labels: ['Bacteria', 'Virus', 'Colloids'],
+                datasets: [{
+                    label: 'Rejection %',
+                    data: [100, 50, 80],
+                    backgroundColor: ['#69f0ae', '#ff5252', '#ffd740']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { min: 0, max: 100 } },
+                animation: false
+            }
+        });
+
+        // Chart 3: Flux Decline
+        this.chartFlux = new Chart(document.getElementById('chartFlux'), {
+            type: 'line',
+            data: {
+                labels: Array(20).fill(''),
+                datasets: [{
+                    label: 'Flux (LMH)',
+                    data: Array(20).fill(0),
+                    borderColor: '#ff5252',
+                    backgroundColor: 'rgba(255, 82, 82, 0.1)',
+                    fill: true,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { min: 0 }, x: { display: false } },
+                animation: { duration: 0 }
+            }
+        });
+    }
+
+    updateCharts() {
+        // Throttling chart updates to every 10 frames approx
+        if(Math.random() > 0.1) return;
+
+        // Flow Chart
+        const dFlow = this.chartFlow.data.datasets[0].data;
+        dFlow.shift(); dFlow.push(this.state.flow);
+        this.chartFlow.update();
+
+        // Flux Chart
+        const dFlux = this.chartFlux.data.datasets[0].data;
+        dFlux.shift(); dFlux.push(this.state.flux);
+        this.chartFlux.update();
+
+        // Rejection Bar Chart Logic
+        // Bacteria (>1um), Virus (0.05um), Colloid (0.1um)
+        const pore = this.params.poreSize * (1 - this.state.foulingFactor);
+        const rejBac = pore < 1.0 ? 100 : 0;
+        const rejVir = pore < 0.05 ? 100 : (pore < 0.1 ? 50 : 0);
+        const rejCol = pore < 0.1 ? 100 : (pore < 0.5 ? 50 : 0);
+        
+        this.chartRej.data.datasets[0].data = [rejBac, rejVir, rejCol];
+        this.chartRej.update();
+    }
+}
+
+// Start Simulator
+window.onload = () => {
+    window.sim = new MembraneSimulator();
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activated Sludge Process (ASP) Twin</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Inter:wght@400;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        :root { --bg: #0b0e14; --panel: rgba(15, 20, 28, 0.95); --accent: #00d2ff; --bio: #8b5a2b; }
+        body { margin: 0; overflow: hidden; background: var(--bg); color: #fff; font-family: 'Inter', sans-serif; }
+        
+        #ui-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: grid;
+            grid-template-columns: 350px 1fr;
+            padding: 20px; box-sizing: border-box;
+        }
+
+        .panel {
+            background: var(--panel); border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(12px); padding: 25px; pointer-events: auto;
+            border-radius: 8px; display: flex; flex-direction: column; gap: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+
+        h1 { font-family: 'Rajdhani'; margin: 0; color: var(--accent); font-size: 1.8rem; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        label { font-size: 0.85rem; color: #aaa; display: flex; justify-content: space-between; }
+        .val { font-family: 'Roboto Mono', monospace; color: var(--accent); font-weight: bold; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: var(--accent); height: 4px; background: #333; border-radius: 2px; }
+
+        .btn {
+            background: rgba(0, 210, 255, 0.1); border: 1px solid var(--accent); color: var(--accent);
+            padding: 12px; font-family: 'Rajdhani'; font-weight: bold; cursor: pointer;
+            text-transform: uppercase; transition: 0.2s; border-radius: 4px; margin-top: 10px;
+        }
+        .btn:hover { background: var(--accent); color: #000; box-shadow: 0 0 15px var(--accent); }
+        .btn.active { background: #00ff9d; color: #000; border-color: #00ff9d; }
+
+        .legend-box {
+            background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px; font-size: 0.8rem;
+            display: flex; flex-direction: column; gap: 5px;
+        }
+        .legend-row { display: flex; align-items: center; gap: 10px; color: #ccc; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        #canvas-container { position: absolute; width: 100%; height: 100%; z-index: -1; }
+    </style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<div id="ui-container">
+    <div class="panel">
+        <h1>Aeration Basin Twin</h1>
+        <p style="font-size: 0.8rem; color: #888; margin-top:-10px;">Biological Reactor Configuration</p>
+
+        <div class="control-group">
+            <label>MLSS Concentration <span id="val-mlss" class="val">3500 mg/L</span></label>
+            <input type="range" id="inp-mlss" min="2000" max="5000" step="100" value="3500">
+            <small style="color:#666; font-size:0.7rem;">Controls Turbidity & Biomass Density</small>
+        </div>
+
+        <div class="control-group">
+            <label>Sludge Age (SRT) <span id="val-srt" class="val">8.0 d</span></label>
+            <input type="range" id="inp-srt" min="5" max="15" step="0.5" value="8.0">
+            <small style="color:#666; font-size:0.7rem;">Controls Floc Color (Young vs Old)</small>
+        </div>
+
+        <div class="control-group">
+            <label>Aeration Rate <span id="val-air" class="val">12.0 m³/min</span></label>
+            <input type="range" id="inp-air" min="5" max="25" step="0.5" value="12.0">
+            <small style="color:#666; font-size:0.7rem;">Controls Turbulence & DO Transfer</small>
+        </div>
+
+        <button id="btn-cut" class="btn">Toggle Cross-Section</button>
+
+        <div class="legend-box">
+            <div style="color:var(--accent); font-weight:bold; margin-bottom:5px;">Process State</div>
+            <div class="legend-row">
+                <div class="dot" style="background:var(--bio)"></div> 
+                <span id="lbl-floc">Mature Biomass (SRT 8d)</span>
+            </div>
+            <div class="legend-row">
+                <div class="dot" style="background:#fff; opacity:0.6"></div> 
+                <span>Oxygen Bubbles (Diffused Air)</span>
+            </div>
+            <div class="legend-row">
+                <div class="dot" style="background:#444; border:1px solid #666"></div> 
+                <span>Diffuser Grid</span>
+            </div>
+        </div>
+        
+        <div style="font-size:0.75rem; color:#666; text-align:center;">
+            Visualization uses Beer-Lambert law for turbidity rendering.
+        </div>
+    </div>
+</div>
+
+<script>
+// --- SHADERS FOR REALISTIC WASTEWATER ---
+
+// Vertex: Handles Surface Waves based on Aeration
+const LIQUOR_VERT = `
+    uniform float uTime;
+    uniform float uAeration; 
+    
+    varying vec2 vUv;
+    varying float vWaveHeight;
+    varying vec3 vWorldPos;
+
+    // Simplex Noise
+    vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+    vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+    vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
+    float snoise(vec2 v) {
+        const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+        vec2 i  = floor(v + dot(v, C.yy) );
+        vec2 x0 = v - i + dot(i, C.xx);
+        vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+        vec4 x12 = x0.xyxy + C.xxzz;
+        x12.xy -= i1;
+        i = mod289(i);
+        vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 )) + i.x + vec3(0.0, i1.x, 1.0 ));
+        vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+        m = m*m ; m = m*m ;
+        vec3 x = 2.0 * fract(p * C.www) - 1.0;
+        vec3 h = abs(x) - 0.5;
+        vec3 ox = floor(x + 0.5);
+        vec3 a0 = x - ox;
+        m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+        vec3 g;
+        g.x  = a0.x  * x0.x  + h.x  * x0.y;
+        g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+        return 130.0 * dot(m, g);
+    }
+
+    void main() {
+        vUv = uv;
+        vec3 pos = position;
+        vWorldPos = (modelMatrix * vec4(pos, 1.0)).xyz;
+
+        // Aeration creates chaotic surface spikes
+        float boil = snoise(pos.xz * 1.5 + uTime * 2.0) * (uAeration * 0.03); 
+        float ripple = sin(pos.x * 5.0 + uTime) * cos(pos.z * 4.0 + uTime) * 0.05;
+        
+        float totalDisp = boil + (ripple * 0.2);
+        
+        // Only displace top surface
+        if(normal.y > 0.5) {
+            pos.y += totalDisp;
+            vWaveHeight = totalDisp;
+        } else {
+            vWaveHeight = 0.0;
+        }
+
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+    }
+`;
+
+// Fragment: Handles Turbidity (MLSS) and Color (SRT)
+const LIQUOR_FRAG = `
+    uniform vec3 uColorYoung; // Light Tan
+    uniform vec3 uColorOld;   // Dark Brown
+    uniform float uSRTFactor; // 0 to 1
+    uniform float uMLSS;      // 2000 to 5000
+    uniform float uOpacity;   
+    
+    varying float vWaveHeight;
+    varying vec3 vWorldPos;
+
+    void main() {
+        // 1. Calculate Biomass Color based on SRT
+        vec3 bioColor = mix(uColorYoung, uColorOld, uSRTFactor);
+        
+        // 2. Calculate Optical Density (Turbidity) based on MLSS
+        // Higher MLSS = Darker, more opaque, less light penetration
+        float turbidity = clamp((uMLSS - 1000.0) / 4000.0, 0.0, 1.0);
+        
+        // Base color mixes between water blue (at very low MLSS, theoretical) and bio color
+        vec3 finalColor = mix(vec3(0.0, 0.2, 0.3), bioColor, 0.8 + (turbidity * 0.2));
+        
+        // 3. Surface Foam from Aeration
+        // If wave height is high (boiling), add white foam
+        float foam = smoothstep(0.1, 0.25, vWaveHeight);
+        finalColor += vec3(foam * 0.5);
+
+        // 4. Alpha Calculation
+        // High MLSS is nearly opaque. Low MLSS is translucent.
+        float alpha = 0.6 + (turbidity * 0.4);
+
+        gl_FragColor = vec4(finalColor, alpha * uOpacity);
+    }
+`;
+
+class ASPTwin {
+    constructor() {
+        this.params = {
+            MLSS: 3500,
+            SRT: 8.0,
+            Aeration: 12.0
+        };
+        this.clock = new THREE.Clock();
+        this.isCut = false;
+
+        this.initThree();
+        this.initTank();
+        this.initBubbles(2000);
+        this.initFlocs(3000);
+        this.bindUI();
+        
+        this.animate = this.animate.bind(this);
+        this.animate();
+    }
+
+    initThree() {
+        this.container = document.getElementById('canvas-container');
+        this.scene = new THREE.Scene();
+        this.scene.fog = new THREE.FogExp2(0x0b0e14, 0.03);
+
+        this.camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+        this.camera.position.set(8, 6, 8);
+        this.camera.lookAt(0, 0, 0);
+
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.localClippingEnabled = true; // Enable cross-section
+        this.container.appendChild(this.renderer.domElement);
+
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+        this.controls.maxPolarAngle = Math.PI/2 - 0.1;
+
+        // Lights
+        const amb = new THREE.AmbientLight(0xffffff, 0.4);
+        const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+        dir.position.set(5, 10, 5);
+        this.scene.add(amb, dir);
+
+        // Cutting Plane
+        this.clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 1.0);
+    }
+
+    initTank() {
+        this.tankGroup = new THREE.Group();
+        this.scene.add(this.tankGroup);
+
+        const concreteMat = new THREE.MeshStandardMaterial({ 
+            color: 0x555555, roughness: 0.9, side: THREE.DoubleSide 
+        });
+
+        // 1. Concrete Basin (10m x 5m x 4m deep)
+        const w = 4, h = 3, l = 8;
+        
+        // Floor
+        const floor = new THREE.Mesh(new THREE.BoxGeometry(w, 0.2, l), concreteMat);
+        floor.position.y = -0.1;
+        this.tankGroup.add(floor);
+
+        // Walls (Open Top)
+        const wallGeo = new THREE.BoxGeometry(0.2, h, l);
+        const w1 = new THREE.Mesh(wallGeo, concreteMat); w1.position.set(-w/2, h/2, 0);
+        const w2 = new THREE.Mesh(wallGeo, concreteMat); w2.position.set(w/2, h/2, 0);
+        
+        const endGeo = new THREE.BoxGeometry(w + 0.44, h, 0.22);
+        const w3 = new THREE.Mesh(endGeo, concreteMat); w3.position.set(0, h/2, -l/2);
+        const w4 = new THREE.Mesh(endGeo, concreteMat); w4.position.set(0, h/2, l/2);
+        
+        this.tankGroup.add(w1, w2, w3, w4);
+
+        // 2. Diffuser Grid (Pipes at bottom)
+        const pipeMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.2 });
+        for(let z = -3; z <= 3; z+=1.5) {
+            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, w-0.5), pipeMat);
+            pipe.rotation.z = Math.PI/2;
+            pipe.position.set(0, 0.1, z);
+            this.tankGroup.add(pipe);
+            
+            // Diffuser Discs
+            for(let x = -1.5; x <= 1.5; x+=0.5) {
+                const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.05), new THREE.MeshBasicMaterial({color:0x222}));
+                disc.position.set(x, 0.15, z);
+                this.tankGroup.add(disc);
+            }
+        }
+
+        // 3. Mixed Liquor Volume (The Water)
+        this.liquorUniforms = {
+            uTime: { value: 0 },
+            uAeration: { value: this.params.Aeration },
+            uMLSS: { value: this.params.MLSS },
+            uSRTFactor: { value: 0.5 }, // Derived from 8 days
+            uColorYoung: { value: new THREE.Color(0xC2B280) }, // Tan
+            uColorOld: { value: new THREE.Color(0x3E2723) },   // Dark Brown
+            uOpacity: { value: 0.9 }
+        };
+
+        const liquorMat = new THREE.ShaderMaterial({
+            uniforms: this.liquorUniforms,
+            vertexShader: LIQUOR_VERT,
+            fragmentShader: LIQUOR_FRAG,
+            transparent: true,
+            side: THREE.DoubleSide,
+            clippingPlanes: [] // Updated dynamically
+        });
+
+        // Use BoxGeometry with high segments for top face vertex displacement
+        const liqGeo = new THREE.BoxGeometry(w-0.1, h-0.5, l-0.1, 20, 1, 40);
+        this.liquorMesh = new THREE.Mesh(liqGeo, liquorMat);
+        this.liquorMesh.position.y = (h-0.5)/2;
+        this.tankGroup.add(this.liquorMesh);
+    }
+
+    initBubbles(count) {
+        // Instanced Mesh for Bubbles
+        const geo = new THREE.IcosahedronGeometry(0.02, 0);
+        const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 });
+        this.bubbles = new THREE.InstancedMesh(geo, mat, count);
+        this.tankGroup.add(this.bubbles);
+
+        this.bubData = [];
+        for(let i=0; i<count; i++) {
+            this.bubData.push({
+                x: (Math.random()-0.5) * 3.5,
+                y: Math.random() * 2.5,
+                z: (Math.random()-0.5) * 7.5,
+                speed: 0.05 + Math.random() * 0.05,
+                offset: Math.random() * 100
+            });
+        }
+    }
+
+    initFlocs(count) {
+        // Instanced Mesh for Biomass Flocs
+        const geo = new THREE.TetrahedronGeometry(0.03, 0); // Irregular shape
+        this.flocMat = new THREE.MeshBasicMaterial({ color: 0x8b5a2b, transparent:true, opacity:0.8 });
+        this.flocs = new THREE.InstancedMesh(geo, this.flocMat, count);
+        this.tankGroup.add(this.flocs);
+
+        this.flocData = [];
+        for(let i=0; i<count; i++) {
+            this.flocData.push({
+                x: (Math.random()-0.5) * 3.8,
+                y: Math.random() * 2.5,
+                z: (Math.random()-0.5) * 7.8,
+                vx: 0, vy: 0, vz: 0
+            });
+        }
+    }
+
+    updatePhysics(dt) {
+        const t = this.clock.getElapsedTime();
+        const dummy = new THREE.Object3D();
+
+        // 1. Update Uniforms based on Sliders
+        // Normalize SRT (5-15) to 0-1 range for color lerp
+        const srtNorm = (this.params.SRT - 5) / 10;
+        this.liquorUniforms.uSRTFactor.value = srtNorm;
+        this.liquorUniforms.uMLSS.value = this.params.MLSS;
+        this.liquorUniforms.uAeration.value = this.params.Aeration;
+        this.liquorUniforms.uTime.value = t;
+
+        // Update Floc Color Base
+        const c1 = new THREE.Color(0xC2B280);
+        const c2 = new THREE.Color(0x3E2723);
+        const flocCol = c1.lerp(c2, srtNorm); // Dynamic Color
+        this.flocMat.color = flocCol;
+
+        // 2. Animate Bubbles (Driven by Aeration Rate)
+        const airFactor = this.params.Aeration / 12.0; // 1.0 is base
+        
+        this.bubData.forEach((b, i) => {
+            // Speed increases with Air Rate
+            b.y += b.speed * airFactor * dt * 60;
+            
+            // Wiggle
+            const wiggle = Math.sin(t * 5 + b.offset) * 0.01 * airFactor;
+            
+            if(b.y > 2.5) { // Reset at surface
+                b.y = 0;
+                b.x = (Math.random()-0.5) * 3.5;
+            }
+
+            dummy.position.set(b.x + wiggle, b.y, b.z);
+            
+            // Visibility check: If Aeration is low, hide some bubbles
+            // Map 5-25 to 0-count
+            const visibleThreshold = (this.params.Aeration - 4) / 21; // 0 to 1
+            const scale = (i / this.bubData.length < visibleThreshold) ? 1 : 0;
+            dummy.scale.set(scale, scale, scale);
+            
+            dummy.updateMatrix();
+            this.bubbles.setMatrixAt(i, dummy.matrix);
+        });
+        this.bubbles.instanceMatrix.needsUpdate = true;
+
+        // 3. Animate Flocs (Driven by Aeration Turbulence)
+        this.flocData.forEach((f, i) => {
+            // Flocs circulate in rolls due to bubbles
+            // Simple chaotic motion based on AirFlow
+            const turb = this.params.Aeration * 0.02;
+            
+            f.vx += (Math.random()-0.5) * turb * dt;
+            f.vy += (Math.random()-0.5) * turb * dt;
+            f.vz += (Math.random()-0.5) * turb * dt;
+            
+            // Dampening
+            f.vx *= 0.9; f.vy *= 0.9; f.vz *= 0.9;
+
+            f.x += f.vx; f.y += f.vy; f.z += f.vz;
+
+            // Bounds
+            if(Math.abs(f.x) > 1.9) f.x *= -0.9;
+            if(Math.abs(f.z) > 3.9) f.z *= -0.9;
+            if(f.y < 0) f.y = 0.1;
+            if(f.y > 2.5) f.y = 2.4;
+
+            dummy.position.set(f.x, f.y, f.z);
+            
+            // Density Check: Hide flocs if MLSS is low?
+            // Actually, we keep count constant but change size slightly
+            // Low MLSS = Smaller/Fewer flocs visible
+            const mlssFactor = (this.params.MLSS - 1500) / 3500; 
+            const scale = (i / this.flocData.length < mlssFactor) ? (0.5 + srtNorm*0.5) : 0;
+            
+            dummy.scale.set(scale, scale, scale);
+            dummy.updateMatrix();
+            this.flocs.setMatrixAt(i, dummy.matrix);
+        });
+        this.flocs.instanceMatrix.needsUpdate = true;
+    }
+
+    bindUI() {
+        const updateVal = (id, param, suffix) => {
+            const el = document.getElementById(id);
+            el.addEventListener('input', (e) => {
+                this.params[param] = parseFloat(e.target.value);
+                document.getElementById(id.replace('inp', 'val')).innerText = this.params[param].toFixed(1) + suffix;
+                this.updateLabels();
+            });
+        };
+
+        updateVal('inp-mlss', 'MLSS', ' mg/L');
+        updateVal('inp-srt', 'SRT', ' d');
+        updateVal('inp-air', 'Aeration', ' m³/min');
+
+        document.getElementById('btn-cut').onclick = () => {
+            this.isCut = !this.isCut;
+            const btn = document.getElementById('btn-cut');
+            
+            if(this.isCut) {
+                this.renderer.clippingPlanes = [this.clipPlane];
+                // Make liquor opaque inside cut to see "mud"
+                this.liquorUniforms.uOpacity.value = 1.0; 
+                btn.classList.add('active');
+            } else {
+                this.renderer.clippingPlanes = [];
+                this.liquorUniforms.uOpacity.value = 0.9;
+                btn.classList.remove('active');
+            }
+        };
+    }
+
+    updateLabels() {
+        // Dynamic Text Updates
+        const srt = this.params.SRT;
+        const txt = srt < 7 ? "Young Sludge (Bulking Risk)" : srt > 12 ? "Old Sludge (Pin Flocs)" : "Healthy Biomass";
+        document.getElementById('lbl-floc').innerText = txt;
+    }
+
+    animate() {
+        requestAnimationFrame(this.animate);
+        this.updatePhysics(0.016);
+        this.controls.update();
+        this.renderer.render(this.scene, this.camera);
+    }
+}
+
+// Boot
+window.onload = () => {
+    const app = new ASPTwin();
+    window.addEventListener('resize', () => {
+        app.camera.aspect = window.innerWidth / window.innerHeight;
+        app.camera.updateProjectionMatrix();
+        app.renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+};
+</script>
+</body>
+</html>

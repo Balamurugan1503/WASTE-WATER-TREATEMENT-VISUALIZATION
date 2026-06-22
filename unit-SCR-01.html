@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fine Screening Digital Twin</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@300;400;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0b0e14;
+            --bg-panel: #151921;
+            --accent-blue: #00d2ff;
+            --accent-danger: #ff4444;
+            --accent-warn: #ffaa00;
+            --accent-success: #00ff9d;
+            --text-main: #e0f2fe;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --font-display: 'Rajdhani', sans-serif;
+            --font-mono: 'Roboto Mono', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-dark); color: var(--text-main); font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+
+        .btn {
+            background: rgba(0, 210, 255, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue);
+            padding: 12px 24px; border-radius: 4px; cursor: pointer; font-family: var(--font-display);
+            font-weight: 700; text-transform: uppercase; letter-spacing: 1px; transition: all 0.2s;
+        }
+        .btn:hover { background: var(--accent-blue); color: #000; box-shadow: 0 0 15px var(--accent-blue); }
+
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s ease; }
+        .modal.active { display: flex; opacity: 1; }
+
+        .sim-layout { width: 100%; height: 100%; display: grid; grid-template-columns: 350px 1fr 350px; }
+        .sim-sidebar { background: var(--bg-panel); border-right: 1px solid var(--border); padding: 25px; display: flex; flex-direction: column; overflow-y: auto; z-index: 10; }
+        .sim-sidebar.right { border-left: 1px solid var(--border); border-right: none; }
+        
+        h2 { font-family: var(--font-display); font-size: 1.8rem; color: #fff; margin-bottom: 5px; }
+        h3 { font-family: var(--font-display); font-size: 1.2rem; color: #fff; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 25px; }
+
+        .control-group { margin-bottom: 25px; }
+        .control-label { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 10px; color: var(--text-muted); }
+        .control-val { font-family: var(--font-mono); color: var(--accent-blue); }
+
+        input[type=range] { width: 100%; -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-blue); cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px var(--accent-blue); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #334155; border-radius: 2px; }
+
+        .output-box { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 15px; margin-top: auto; }
+        .output-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; }
+        .output-val { font-family: var(--font-mono); color: #fff; }
+
+        .sim-canvas-container { position: relative; width: 100%; height: 100%; background: radial-gradient(circle at center, #1a202c 0%, #000 100%); }
+        .close-sim { position: absolute; top: 20px; right: 20px; z-index: 20; background: rgba(0,0,0,0.5); border: 1px solid #fff; color: #fff; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: 0.2s; }
+        .close-sim:hover { background: var(--accent-danger); border-color: var(--accent-danger); }
+        .flex-gap { display: flex; gap: 10px; }
+        .w-full { width: 100%; }
+    </style>
+</head>
+<body>
+
+    <div style="text-align: center;">
+        <h1 style="font-family: var(--font-display); font-size: 3rem; margin-bottom: 10px;">Primary Treatment</h1>
+        <p style="color: var(--text-muted); margin-bottom: 30px;">Unit Operation: Mechanical Fine Screening</p>
+        <button class="btn" onclick="openSim()">Launch Simulator</button>
+    </div>
+
+    <div id="modal-screen" class="modal">
+        <button class="close-sim" onclick="closeSim()">✕</button>
+        
+        <div class="sim-layout">
+            <div class="sim-sidebar">
+                <h2>Fine Screen Unit</h2>
+                <p class="subtitle">Physics: Bernoulli Equation & Fouling Factors</p>
+                
+                <div class="control-group">
+                    <div class="control-label"><span>Screen Size (mm)</span> <span id="val-sc-opening" class="control-val">5.0</span></div>
+                    <input type="range" id="inp-sc-opening" min="1" max="10" value="5" step="0.5">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Flow Rate (m³/h)</span> <span id="val-sc-flow" class="control-val">50.0</span></div>
+                    <input type="range" id="inp-sc-flow" min="10" max="200" value="50" step="5">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Screen Angle (°)</span> <span id="val-sc-ang" class="control-val">30.0</span></div>
+                    <input type="range" id="inp-sc-ang" min="15" max="60" value="30" step="1">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Influent Solids (PPM)</span> <span id="val-sc-ppm" class="control-val">500</span></div>
+                    <input type="range" id="inp-sc-ppm" min="100" max="3000" value="500" step="50">
+                </div>
+
+                <div class="flex-gap">
+                    <button class="btn w-full" style="border-color:#555; color:#aaa" onclick="resetSim()">Reset</button>
+                </div>
+
+                <div class="output-box">
+                    <div class="output-row"><span>Capture Eff:</span> <span id="out-sc-eff" class="output-val" style="color:var(--accent-blue)">--%</span></div>
+                    <div class="output-row"><span>Approach Vel:</span> <span id="out-sc-vel" class="output-val">-- m/s</span></div>
+                    <div class="output-row"><span>Headloss (Δh):</span> <span id="out-sc-head" class="output-val" style="color:var(--accent-warn)">-- cm</span></div>
+                    
+                    <div class="output-row"><span>Solids Loading:</span> <span id="out-sc-loading" class="output-val">-- kg/h</span></div>
+                    <div class="output-row"><span>Clogging Risk:</span> <span id="out-sc-risk" class="output-val">--</span></div>
+
+                    <div class="output-row" style="margin-top:10px; border-top:1px dashed #444; padding-top:10px;">
+                        <span id="out-sc-status" style="font-size:0.8em; line-height:1.4">Initializing...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sim-canvas-container" id="container-screen"></div>
+            
+            <div class="sim-sidebar right">
+                <h3>Hydraulic Performance</h3>
+                <canvas id="chart-screen" height="250"></canvas>
+                
+                <div style="margin-top:20px; font-size:0.85rem; color:var(--text-muted); line-height: 1.6;">
+                    <strong>System Constants:</strong><br>
+                    Channel Width: 1.0 m<br>
+                    Submerged Height: 0.6 m<br><br>
+                    <strong>Process Update:</strong><br>
+                    Includes mechanical rake simulation and solids matting physics. High PPM increases headloss and particle density.
+                </div>
+                
+                <div style="margin-top:20px;">
+                    <button class="btn w-full" style="font-size:0.8rem" onclick="toggleXRay()">Toggle X-Ray View</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// --- CONFIGURATION ---
+// ✅ ADDED PPM DEFAULT
+const DEFAULTS = { opening: 5.0, flow: 50.0, angle: 30.0, ppm: 500.0 };
+const CONST_WIDTH = 1.0;
+const CONST_HEIGHT = 0.6;
+
+let sceneManager = null;
+let performanceChart = null;
+
+class ScreenSimulator {
+    constructor(containerId) {
+        this.container = document.getElementById(containerId);
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        
+        this.scene = new THREE.Scene();
+        this.camera = new THREE.PerspectiveCamera(50, this.width / this.height, 0.1, 100);
+        this.camera.position.set(3, 2, 5);
+        this.camera.lookAt(0, 0.5, 0);
+        
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(this.width, this.height);
+        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.container.appendChild(this.renderer.domElement);
+        
+        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        const spot = new THREE.SpotLight(0xffffff, 1);
+        spot.position.set(5, 10, 5);
+        this.scene.add(ambient, spot);
+
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+
+        this.objects = {};
+        this.screenState = { xray: false, rakeY: 0, rakeDir: 1 }; 
+        this.particlesData = [];
+        this.simParams = { ...DEFAULTS };
+
+        this.initGeometry();
+        this.initParticles();
+        
+        window.addEventListener('resize', () => this.resize());
+        this.animate = this.animate.bind(this);
+        requestAnimationFrame(this.animate);
+    }
+
+    initGeometry() {
+        this.screenGroup = new THREE.Group();
+        this.scene.add(this.screenGroup);
+
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x8c8c8c, roughness: 0.9, side: THREE.DoubleSide });
+        
+        // Floor
+        const floor = new THREE.Mesh(new THREE.BoxGeometry(CONST_WIDTH + 0.4, 0.2, 6.0), wallMat);
+        floor.position.y = -0.1;
+        floor.name = "Floor";
+        this.screenGroup.add(floor);
+
+        // Walls
+        const wallGeo = new THREE.BoxGeometry(0.2, 2.0, 6.0);
+        const wallL = new THREE.Mesh(wallGeo, wallMat);
+        wallL.position.set(-(CONST_WIDTH/2 + 0.1), 1.0, 0);
+        wallL.name = "WallL";
+        const wallR = new THREE.Mesh(wallGeo, wallMat);
+        wallR.position.set((CONST_WIDTH/2 + 0.1), 1.0, 0);
+        wallR.name = "WallR";
+        this.screenGroup.add(wallL, wallR);
+
+        // --- SCREEN PIVOT ---
+        this.screenPivot = new THREE.Group();
+        this.screenGroup.add(this.screenPivot);
+
+        // Rails
+        const railGeo = new THREE.BoxGeometry(0.1, 3.5, 0.1);
+        const railMat = new THREE.MeshStandardMaterial({ color: 0x334455, metalness: 0.6 });
+        const r1 = new THREE.Mesh(railGeo, railMat); r1.position.set(-(CONST_WIDTH/2 - 0.05), 1.0, 0);
+        const r2 = new THREE.Mesh(railGeo, railMat); r2.position.set((CONST_WIDTH/2 - 0.05), 1.0, 0);
+        this.screenPivot.add(r1, r2);
+
+        // Motor
+        const motor = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, CONST_WIDTH + 0.2), new THREE.MeshStandardMaterial({ color: 0xffaa00 }));
+        motor.rotation.z = Math.PI/2;
+        motor.position.set(0, 2.8, 0.2);
+        this.screenPivot.add(motor);
+
+        // Rake
+        const rakeGeo = new THREE.BoxGeometry(CONST_WIDTH + 0.1, 0.15, 0.2); 
+        const rakeMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, metalness: 0.4 });
+        this.objects.rake = new THREE.Mesh(rakeGeo, rakeMat);
+        this.objects.rake.position.set(0, 0.5, 0.1);
+        this.screenPivot.add(this.objects.rake);
+
+        // Hopper
+        const hopperGeo = new THREE.BoxGeometry(CONST_WIDTH + 0.2, 0.8, 0.8);
+        const hopperMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+        this.objects.hopper = new THREE.Mesh(hopperGeo, hopperMat);
+        this.objects.hopper.position.set(0, 2.2, -0.6); 
+        this.screenPivot.add(this.objects.hopper);
+
+        // Bars
+        this.buildScreenBars(DEFAULTS.opening, CONST_WIDTH); 
+
+        // Water
+        const waterMat = new THREE.MeshPhysicalMaterial({ 
+            color: 0x00aaff, transmission: 0.9, opacity: 0.7, transparent: true, roughness: 0.1 
+        });
+        const wGeo = new THREE.PlaneGeometry(CONST_WIDTH - 0.1, 2.9);
+        this.objects.waterUp = new THREE.Mesh(wGeo, waterMat);
+        this.objects.waterUp.rotation.x = -Math.PI/2;
+        this.objects.waterUp.position.set(0, 0.6, -1.5);
+        
+        this.objects.waterDown = new THREE.Mesh(wGeo, waterMat);
+        this.objects.waterDown.rotation.x = -Math.PI/2;
+        this.objects.waterDown.position.set(0, 0.6, 1.5);
+        this.screenGroup.add(this.objects.waterUp, this.objects.waterDown);
+    }
+
+    // ✅ MODIFIED TO SUPPORT HIGH PPM BUFFERS
+    initParticles() {
+        const maxParticles = 5000; // Increased buffer
+        const pGeo = new THREE.BufferGeometry();
+        const pPos = new Float32Array(maxParticles * 3);
+        const pCol = new Float32Array(maxParticles * 3);
+        
+        this.particlesData = [];
+        
+        for(let i=0; i<maxParticles; i++) {
+            this.resetParticle(i, pPos, CONST_WIDTH, CONST_HEIGHT);
+            // Initialize hidden off-screen
+            pPos[i*3+1] = -50; 
+            
+            this.particlesData.push({ 
+                velocity: new THREE.Vector3(), 
+                trapped: false,
+                collected: false,
+                sizeMM: 2 + Math.random() * 58 
+            });
+        }
+        pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+        pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+        this.objects.particles = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 0.08, vertexColors: true, transparent: true, opacity: 0.9 }));
+        this.screenGroup.add(this.objects.particles);
+    }
+
+    resetParticle(i, posArr, width, height) {
+        posArr[i*3] = (Math.random() - 0.5) * (width - 0.1); 
+        posArr[i*3+1] = Math.random() * height;
+        posArr[i*3+2] = -3.0 - (Math.random() * 2.0); 
+        
+        if(this.particlesData && this.particlesData[i]) {
+            this.particlesData[i].trapped = false;
+            this.particlesData[i].collected = false;
+        }
+    }
+
+    buildScreenBars(openingMM, widthM) {
+        if(this.objects.bars) this.screenPivot.remove(this.objects.bars);
+        
+        const barThickness = 5; 
+        const pitch = openingMM + barThickness;
+        const widthMM = widthM * 1000;
+        const count = Math.floor(widthMM / pitch);
+        
+        const geo = new THREE.BoxGeometry(0.005, 3.0, 0.02);
+        const mat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.8 });
+        
+        this.objects.bars = new THREE.InstancedMesh(geo, mat, count);
+        const dummy = new THREE.Object3D();
+        const startX = -widthM/2 + (pitch/1000)/2;
+        
+        for(let i=0; i<count; i++) {
+            dummy.position.set(startX + i*(pitch/1000), 1.0, 0);
+            dummy.updateMatrix();
+            this.objects.bars.setMatrixAt(i, dummy.matrix);
+        }
+        this.objects.bars.instanceMatrix.needsUpdate = true;
+        this.screenPivot.add(this.objects.bars);
+    }
+
+    updateConfig(params) {
+        this.simParams = params;
+        
+        if(this.currOpening !== params.opening) {
+            this.buildScreenBars(params.opening, CONST_WIDTH);
+            this.currOpening = params.opening;
+        }
+        
+        const rad = THREE.MathUtils.degToRad(params.angle);
+        this.screenPivot.rotation.x = -rad;
+
+        // Water levels influenced by headloss
+        this.objects.waterUp.position.y = CONST_HEIGHT + (params.dh * 2); 
+        this.objects.waterDown.position.y = CONST_HEIGHT;
+    }
+
+    toggleXRay() {
+        this.screenState.xray = !this.screenState.xray;
+        const opacity = this.screenState.xray ? 0.3 : 1.0;
+        const transparent = this.screenState.xray;
+        ["WallL", "WallR", "Floor", "hopper"].forEach(name => {
+            const mesh = this.screenGroup.getObjectByName(name) || this.objects.hopper;
+            if(mesh) {
+                mesh.material.transparent = transparent;
+                mesh.material.opacity = opacity;
+                mesh.material.needsUpdate = true;
+            }
+        });
+    }
+
+    resize() {
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        this.camera.aspect = this.width / this.height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(this.width, this.height);
+    }
+
+    // ✅ UPDATED ANIMATION LOOP FOR PPM EFFECTS
+    animate() {
+        requestAnimationFrame(this.animate);
+        if(!this.objects.particles) return;
+
+        const positions = this.objects.particles.geometry.attributes.position.array;
+        const colors = this.objects.particles.geometry.attributes.color.array;
+        const params = this.simParams;
+
+        // Rake Animation
+        this.screenState.rakeY += 0.015;
+        if(this.screenState.rakeY > 2.8) this.screenState.rakeY = -0.5;
+        if(this.objects.rake) this.objects.rake.position.y = this.screenState.rakeY;
+
+        const flowSpeed = (params.flow / 200) * 0.4 + 0.05; 
+        
+        // Calculate visible particle count based on PPM
+        // Map 100-3000 PPM to approx 200-5000 particles
+        const activeCount = Math.floor((params.ppm / 3000) * 4800) + 200;
+
+        for(let i=0; i<this.particlesData.length; i++) {
+            // Hide particles exceeding current PPM capacity
+            if(i > activeCount) {
+                positions[i*3+1] = -50; 
+                continue;
+            }
+            // Bring back particle if it was hidden
+            if(positions[i*3+1] < -40) {
+                 this.resetParticle(i, positions, CONST_WIDTH, CONST_HEIGHT);
+            }
+
+            const p = this.particlesData[i];
+
+            if(p.collected) {
+                positions[i*3+2] -= 0.05; 
+                positions[i*3+1] -= 0.08; 
+                colors[i*3] = 0.2; colors[i*3+1] = 0.2; colors[i*3+2] = 0.2;
+
+                if(positions[i*3+1] < 1.0) {
+                     this.resetParticle(i, positions, CONST_WIDTH, CONST_HEIGHT);
+                }
+            } else if(p.trapped) {
+                colors[i*3] = 0.4; colors[i*3+1] = 0.2; colors[i*3+2] = 0.0;
+                // Rake interaction
+                if(this.screenState.rakeY < positions[i*3+1] && positions[i*3+1] < this.screenState.rakeY + 0.3) {
+                     positions[i*3+1] = this.screenState.rakeY + 0.1 + (Math.random()*0.05);
+                }
+                if(positions[i*3+1] > 2.4) {
+                    p.collected = true;
+                    p.trapped = false;
+                }
+            } else {
+                positions[i*3+2] += flowSpeed;
+                
+                if(flowSpeed > 0.3) {
+                    colors[i*3] = 0.6; colors[i*3+1] = 0.8; colors[i*3+2] = 0.9;
+                } else {
+                    colors[i*3] = Math.random()*0.4; colors[i*3+1] = Math.random()*0.3; colors[i*3+2] = 0;
+                }
+
+                // Screen Interaction
+                if(positions[i*3+2] > 0 && positions[i*3+2] < 0.2) {
+                    // Matting Effect: High PPM slightly reduces effective pore size
+                    const mattingEffect = (params.ppm / 3000) * 1.5; 
+                    
+                    if(p.sizeMM >= (params.opening - mattingEffect)) {
+                        p.trapped = true;
+                        positions[i*3+2] = 0.05 + (Math.random() * 0.05); 
+                    } else {
+                        positions[i*3+2] += 0.1; 
+                    }
+                }
+
+                if(positions[i*3+2] > 3.0) {
+                    this.resetParticle(i, positions, CONST_WIDTH, CONST_HEIGHT);
+                }
+            }
+        }
+        
+        this.objects.particles.geometry.attributes.position.needsUpdate = true;
+        this.objects.particles.geometry.attributes.color.needsUpdate = true;
+        this.controls.update();
+        this.renderer.render(this.scene, this.camera);
+    }
+}
+
+// ✅ UPDATED PHYSICS ENGINE
+function runPhysics() {
+    const opening = parseFloat(document.getElementById('inp-sc-opening').value);
+    const flow = parseFloat(document.getElementById('inp-sc-flow').value);
+    const angle = parseFloat(document.getElementById('inp-sc-ang').value);
+    const ppm = parseFloat(document.getElementById('inp-sc-ppm').value); // New Input
+    
+    // Constants
+    const width = CONST_WIDTH;
+    const height = CONST_HEIGHT;
+
+    const barThick = 5;
+    const Q_sec = flow / 3600;
+    const A_proj = width * height; 
+    
+    // Physics: Porosity & Fouling
+    const basePorosity = opening / (opening + barThick);
+    
+    // Fouling factor: increases with PPM and Flow (Impact)
+    const foulingFactor = 1.0 + (ppm * Q_sec * 0.05); 
+    
+    const A_eff = A_proj * basePorosity;
+    const v_approach = Q_sec / A_proj;
+    const v_through = Q_sec / A_eff;
+    const g = 9.81;
+    
+    const k = 1.0 + (1/basePorosity); 
+    
+    // Calculate Headloss with Fouling
+    let dh = k * (v_through * v_through) / (2 * g);
+    dh = dh * foulingFactor; // Apply factor
+
+    // Efficiency Calculation with Matting Bonus
+    let mattingBonus = Math.min(15, ppm / 200); 
+    let eff = Math.max(0, 100 - (opening * 1.5) + mattingBonus);
+    if(v_through > 1.0) eff *= 0.7; // Washout
+    if(eff > 99) eff = 99;
+
+    // Solids Loading Calculation
+    const solidsLoad = (flow * ppm) / 1000; // kg/h
+
+    // Update UI
+    document.getElementById('out-sc-eff').innerText = eff.toFixed(1) + '%';
+    document.getElementById('out-sc-vel').innerText = v_through.toFixed(2) + ' m/s';
+    
+    const dh_cm = dh * 100;
+    document.getElementById('out-sc-head').innerText = dh_cm.toFixed(1) + ' cm';
+    document.getElementById('out-sc-loading').innerText = solidsLoad.toFixed(1) + ' kg/h';
+    
+    // Risk Analysis
+    const riskEl = document.getElementById('out-sc-risk');
+    const statusEl = document.getElementById('out-sc-status');
+    let statusText = "";
+    let riskText = "Low";
+    let riskColor = "var(--accent-success)";
+
+    if (dh_cm > 15 || ppm > 2000) {
+        riskText = "High";
+        riskColor = "var(--accent-danger)";
+        statusText = "• CRITICAL: Screen blinding imminent.";
+    } else if (dh_cm > 8 || ppm > 1000) {
+        riskText = "Medium";
+        riskColor = "var(--accent-warn)";
+        statusText = "• Monitor headloss. Rake cycle increased.";
+    } else {
+        statusText = "• Optimal operation.";
+    }
+    
+    riskEl.innerText = riskText;
+    riskEl.style.color = riskColor;
+    statusEl.innerText = statusText;
+    statusEl.style.color = (riskText === "High") ? "var(--accent-danger)" : "#fff";
+
+    if(sceneManager) {
+        sceneManager.updateConfig({ opening, flow, angle, dh, ppm });
+    }
+    updateChart(flow, A_eff, k, g, foulingFactor);
+}
+
+// ✅ UPDATED CHARTING
+function updateChart(currentFlow, A_eff, k, g, foulingFactor) {
+    if(!performanceChart) return;
+    const flowPoints = [0.2, 0.5, 0.8, 1.0, 1.2, 1.5, 2.0].map(f => currentFlow * f);
+    const headlossPoints = flowPoints.map(q => {
+        const q_s = q/3600;
+        const v = q_s / A_eff;
+        return ((k * v*v / (2*g)) * foulingFactor) * 100; 
+    });
+    performanceChart.data.labels = flowPoints.map(f => Math.round(f));
+    performanceChart.data.datasets[0].data = headlossPoints;
+    performanceChart.update();
+}
+
+function initChart() {
+    const ctx = document.getElementById('chart-screen').getContext('2d');
+    performanceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{ 
+                label: 'Headloss (cm)', 
+                borderColor: '#00d2ff', backgroundColor: 'rgba(0, 210, 255, 0.1)', 
+                data: [], fill: true, tension: 0.4 
+            }]
+        },
+        options: { 
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels:{color:'#fff'} } }, 
+            scales: { 
+                y: { grid:{color:'#333'}, title: {display: true, text: 'Headloss (cm)', color: '#888'}, ticks:{color:'#aaa'} }, 
+                x: { grid:{color:'#333'}, title: {display: true, text: 'Flow Rate (m³/h)', color: '#888'}, ticks:{color:'#aaa'} } 
+            } 
+        }
+    });
+}
+
+function openSim() {
+    document.getElementById('modal-screen').classList.add('active');
+    if(!sceneManager) {
+        setTimeout(() => {
+            sceneManager = new ScreenSimulator('container-screen');
+            initChart();
+            runPhysics();
+            
+            // Listeners for all inputs including PPM
+            ['inp-sc-opening', 'inp-sc-flow', 'inp-sc-ang', 'inp-sc-ppm'].forEach(id => {
+                document.getElementById(id).addEventListener('input', (e) => {
+                    document.getElementById(id.replace('inp', 'val')).innerText = e.target.value;
+                    runPhysics();
+                });
+            });
+        }, 100);
+    }
+}
+
+function closeSim() { document.getElementById('modal-screen').classList.remove('active'); }
+
+function resetSim() {
+    document.getElementById('inp-sc-opening').value = DEFAULTS.opening;
+    document.getElementById('inp-sc-flow').value = DEFAULTS.flow;
+    document.getElementById('inp-sc-ang').value = DEFAULTS.angle;
+    document.getElementById('inp-sc-ppm').value = DEFAULTS.ppm;
+    
+    document.getElementById('val-sc-opening').innerText = DEFAULTS.opening;
+    document.getElementById('val-sc-flow').innerText = DEFAULTS.flow;
+    document.getElementById('val-sc-ang').innerText = DEFAULTS.angle;
+    document.getElementById('val-sc-ppm').innerText = DEFAULTS.ppm;
+    
+    runPhysics();
+}
+
+function toggleXRay() { if(sceneManager) sceneManager.toggleXRay(); }
+</script>
+</body>
+</html>

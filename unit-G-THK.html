@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gravity Thickener Digital Twin</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@300;400;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0b0e14;
+            --bg-panel: #151921;
+            --accent-blue: #00d2ff;
+            --accent-danger: #ff4444;
+            --accent-warn: #ffaa00;
+            --accent-success: #00ff9d;
+            --sludge-color: #5c4033;
+            --text-main: #e0f2fe;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --font-display: 'Rajdhani', sans-serif;
+            --font-mono: 'Roboto Mono', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-dark); color: var(--text-main); font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+
+        .btn {
+            background: rgba(0, 210, 255, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue);
+            padding: 12px 24px; border-radius: 4px; cursor: pointer; font-family: var(--font-display);
+            font-weight: 700; text-transform: uppercase; letter-spacing: 1px; transition: all 0.2s;
+        }
+        .btn:hover { background: var(--accent-blue); color: #000; box-shadow: 0 0 15px var(--accent-blue); }
+
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s ease; }
+        .modal.active { display: flex; opacity: 1; }
+
+        .sim-layout { width: 100%; height: 100%; display: grid; grid-template-columns: 350px 1fr 350px; }
+        .sim-sidebar { background: var(--bg-panel); border-right: 1px solid var(--border); padding: 25px; display: flex; flex-direction: column; overflow-y: auto; z-index: 10; }
+        .sim-sidebar.right { border-left: 1px solid var(--border); border-right: none; }
+        
+        h2 { font-family: var(--font-display); font-size: 1.8rem; color: #fff; margin-bottom: 5px; }
+        h3 { font-family: var(--font-display); font-size: 1.2rem; color: #fff; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 25px; }
+
+        .control-group { margin-bottom: 25px; }
+        .control-label { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 10px; color: var(--text-muted); }
+        .control-val { font-family: var(--font-mono); color: var(--accent-blue); }
+
+        input[type=range] { width: 100%; -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-blue); cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px var(--accent-blue); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #334155; border-radius: 2px; }
+
+        .output-box { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 15px; margin-top: auto; }
+        .output-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; }
+        .output-val { font-family: var(--font-mono); color: #fff; }
+
+        .sim-canvas-container { position: relative; width: 100%; height: 100%; background: radial-gradient(circle at center, #2d1b15 0%, #000 100%); }
+        .close-sim { position: absolute; top: 20px; right: 20px; z-index: 20; background: rgba(0,0,0,0.5); border: 1px solid #fff; color: #fff; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: 0.2s; }
+        .close-sim:hover { background: var(--accent-danger); border-color: var(--accent-danger); }
+        .flex-gap { display: flex; gap: 10px; }
+        .w-full { width: 100%; }
+
+        /* Badge for ID */
+        .id-badge {
+            background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 3px; font-size: 0.7em; font-family: var(--font-mono); color: #aaa;
+        }
+    </style>
+</head>
+<body>
+
+    <div style="text-align: center;">
+        <h1 style="font-family: var(--font-display); font-size: 3rem; margin-bottom: 10px;">Sludge Treatment</h1>
+        <p style="color: var(--text-muted); margin-bottom: 30px;">Unit Operation: Gravity Thickener <span class="id-badge">ID: G-THK</span></p>
+        <button class="btn" onclick="openSim()">Launch Simulator</button>
+    </div>
+
+    <div id="modal-screen" class="modal">
+        <button class="close-sim" onclick="closeSim()">✕</button>
+        
+        <div class="sim-layout">
+            <div class="sim-sidebar">
+                <h2>Gravity Thickener</h2>
+                <p class="subtitle">Physics: Hindered Settling & Compression</p>
+                
+                <div class="control-group">
+                    <div class="control-label"><span>Influent Flow (m³/h)</span> <span id="val-flow" class="control-val">40.0</span></div>
+                    <input type="range" id="inp-flow" min="10" max="100" value="40" step="1">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Inf. Solids (TSS %)</span> <span id="val-tss" class="control-val">0.8</span></div>
+                    <input type="range" id="inp-tss" min="0.2" max="2.0" value="0.8" step="0.1">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Underflow Rate (m³/h)</span> <span id="val-underflow" class="control-val">10.0</span></div>
+                    <input type="range" id="inp-underflow" min="2" max="30" value="10" step="0.5">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Rake Speed (RPM)</span> <span id="val-rpm" class="control-val">0.15</span></div>
+                    <input type="range" id="inp-rpm" min="0.05" max="0.5" value="0.15" step="0.01">
+                </div>
+
+                <div class="flex-gap">
+                    <button class="btn w-full" style="border-color:#555; color:#aaa" onclick="resetSim()">Reset</button>
+                </div>
+
+                <div class="output-box">
+                    <div class="output-row"><span>Output Solids:</span> <span id="out-solid-conc" class="output-val" style="color:var(--accent-blue)">--%</span></div>
+                    <div class="output-row"><span>Blanket Height:</span> <span id="out-blanket" class="output-val">-- m</span></div>
+                    <div class="output-row"><span>Rake Torque:</span> <span id="out-torque" class="output-val" style="color:var(--accent-warn)">-- Nm</span></div>
+                    
+                    <div class="output-row"><span>Solids Loading:</span> <span id="out-slr" class="output-val">-- kg/m²/h</span></div>
+                    <div class="output-row"><span>Status:</span> <span id="out-risk" class="output-val">--</span></div>
+
+                    <div class="output-row" style="margin-top:10px; border-top:1px dashed #444; padding-top:10px;">
+                        <span id="out-status-msg" style="font-size:0.8em; line-height:1.4">Initializing...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sim-canvas-container" id="container-sim"></div>
+            
+            <div class="sim-sidebar right">
+                <h3>Thickening Performance</h3>
+                <canvas id="chart-perf" height="250"></canvas>
+                
+                <div style="margin-top:20px; font-size:0.85rem; color:var(--text-muted); line-height: 1.6;">
+                    <strong>Design Parameters:</strong><br>
+                    Tank Diameter: 12.0 m<br>
+                    Side Water Depth: 3.5 m<br><br>
+                    <strong>Process Update:</strong><br>
+                    Simulation models hindered settling (Zone Settling). 
+                    <br><span style="color:var(--accent-warn)">Warning:</span> Low underflow rates increase output concentration but raise the sludge blanket, risking solids carryover.
+                </div>
+                
+                <div style="margin-top:20px;">
+                    <button class="btn w-full" style="font-size:0.8rem" onclick="toggleWireframe()">Toggle Wireframe</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// --- CONFIGURATION ---
+const DEFAULTS = { flow: 40.0, tss: 0.8, underflow: 10.0, rpm: 0.15 };
+const TANK_RADIUS = 6.0; // Scaled down in 3D
+const TANK_HEIGHT = 3.5;
+const TANK_AREA = Math.PI * Math.pow(12/2, 2); // Real world Area (113 m2)
+
+let sceneManager = null;
+let performanceChart = null;
+
+class ThickenerSim {
+    constructor(containerId) {
+        this.container = document.getElementById(containerId);
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        
+        this.scene = new THREE.Scene();
+        // Fog to give depth to the murky water
+        this.scene.fog = new THREE.FogExp2(0x1a1510, 0.08);
+
+        this.camera = new THREE.PerspectiveCamera(50, this.width / this.height, 0.1, 100);
+        this.camera.position.set(8, 6, 8);
+        this.camera.lookAt(0, 0, 0);
+        
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(this.width, this.height);
+        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.container.appendChild(this.renderer.domElement);
+        
+        // Lighting
+        const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+        const spot = new THREE.SpotLight(0xffffff, 1.2);
+        spot.position.set(5, 10, 5);
+        spot.castShadow = true;
+        
+        const blueLight = new THREE.PointLight(0x00d2ff, 0.5);
+        blueLight.position.set(-5, 2, -5);
+        
+        this.scene.add(ambient, spot, blueLight);
+
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+        this.controls.maxPolarAngle = Math.PI / 2 - 0.1; // Don't go below ground
+
+        this.objects = {};
+        this.state = { wireframe: false, rakeAngle: 0, blanketHeight: 1.0 }; 
+        this.particlesData = [];
+        this.simParams = { ...DEFAULTS };
+
+        this.initGeometry();
+        this.initParticles();
+        
+        window.addEventListener('resize', () => this.resize());
+        this.animate = this.animate.bind(this);
+        requestAnimationFrame(this.animate);
+    }
+
+    initGeometry() {
+        this.group = new THREE.Group();
+        this.scene.add(this.group);
+
+        // Materials
+        const steelMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.7, metalness: 0.6 });
+        const concreteMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9 });
+        const rakeMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, metalness: 0.4 });
+        
+        // 1. Tank Floor
+        const floorGeo = new THREE.CylinderGeometry(4.2, 4.0, 0.5, 32);
+        const floor = new THREE.Mesh(floorGeo, concreteMat);
+        floor.position.y = -0.25;
+        this.group.add(floor);
+
+        // 2. Tank Walls (Transparent Glass/Acrylic look for Digital Twin)
+        const wallGeo = new THREE.CylinderGeometry(4.2, 4.2, 4.0, 32, 1, true);
+        const wallMat = new THREE.MeshPhysicalMaterial({ 
+            color: 0x88ccff, transmission: 0.6, opacity: 0.3, transparent: true, roughness: 0.1, side: THREE.DoubleSide 
+        });
+        this.objects.walls = new THREE.Mesh(wallGeo, wallMat);
+        this.objects.walls.position.y = 2.0;
+        this.group.add(this.objects.walls);
+
+        // 3. Center Column & Feed Well
+        const colGeo = new THREE.CylinderGeometry(0.3, 0.3, 5.0, 16);
+        const column = new THREE.Mesh(colGeo, steelMat);
+        column.position.y = 2.0;
+        this.group.add(column);
+
+        const wellGeo = new THREE.CylinderGeometry(1.2, 1.2, 1.5, 32, 1, true);
+        const wellMat = new THREE.MeshStandardMaterial({ color: 0x555555, side: THREE.DoubleSide });
+        const well = new THREE.Mesh(wellGeo, wellMat);
+        well.position.y = 3.2; // Top of tank
+        this.group.add(well);
+
+        // 4. Bridge
+        const bridgeGeo = new THREE.BoxGeometry(8.6, 0.2, 0.8);
+        const bridge = new THREE.Mesh(bridgeGeo, steelMat);
+        bridge.position.y = 4.1;
+        this.group.add(bridge);
+
+        // 5. Rake Mechanism (Pivot Group)
+        this.rakeGroup = new THREE.Group();
+        this.group.add(this.rakeGroup);
+
+        // Main Arms
+        const armGeo = new THREE.BoxGeometry(7.8, 0.15, 0.15);
+        const arm = new THREE.Mesh(armGeo, rakeMat);
+        arm.position.y = 0.2;
+        this.rakeGroup.add(arm);
+
+        // Pickets (Vertical bars)
+        const picketGeo = new THREE.BoxGeometry(0.05, 1.5, 0.05);
+        for(let i=0; i<6; i++) {
+            const p1 = new THREE.Mesh(picketGeo, rakeMat);
+            p1.position.set(1.0 + (i*0.5), 0.9, 0);
+            const p2 = new THREE.Mesh(picketGeo, rakeMat);
+            p2.position.set(-(1.0 + (i*0.5)), 0.9, 0);
+            this.rakeGroup.add(p1, p2);
+        }
+
+        // Scrapers (Angled blades at bottom)
+        const scrapeGeo = new THREE.BoxGeometry(0.4, 0.15, 0.02);
+        for(let i=0; i<8; i++) {
+            const s1 = new THREE.Mesh(scrapeGeo, rakeMat);
+            s1.position.set(0.5 + (i*0.45), 0.1, 0.05);
+            s1.rotation.y = Math.PI / 6;
+            const s2 = new THREE.Mesh(scrapeGeo, rakeMat);
+            s2.position.set(-(0.5 + (i*0.45)), 0.1, -0.05);
+            s2.rotation.y = -Math.PI / 6;
+            this.rakeGroup.add(s1, s2);
+        }
+
+        // 6. Sludge Blanket (Visual Volumetric)
+        const blanketGeo = new THREE.CylinderGeometry(4.1, 4.1, 1.0, 32);
+        const blanketMat = new THREE.MeshBasicMaterial({ 
+            color: 0x3e2723, transparent: true, opacity: 0.8 
+        });
+        this.objects.blanket = new THREE.Mesh(blanketGeo, blanketMat);
+        this.objects.blanket.position.y = 0.5; // Start low
+        this.group.add(this.objects.blanket);
+
+        // 7. Water Surface (Weir)
+        const waterGeo = new THREE.RingGeometry(4.0, 4.2, 32);
+        const waterMat = new THREE.MeshBasicMaterial({ color: 0x00d2ff, side: THREE.DoubleSide });
+        const water = new THREE.Mesh(waterGeo, waterMat);
+        water.rotation.x = -Math.PI/2;
+        water.position.y = 3.8;
+        this.group.add(water);
+    }
+
+    initParticles() {
+        // Floc particles
+        const count = 1500;
+        const geom = new THREE.BufferGeometry();
+        const pos = new Float32Array(count * 3);
+        const sizes = new Float32Array(count);
+        
+        for(let i=0; i<count; i++) {
+            this.resetParticle(i, pos);
+            sizes[i] = Math.random() * 0.1;
+        }
+
+        geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geom.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+        
+        const mat = new THREE.PointsMaterial({ 
+            color: 0x8d6e63, 
+            size: 0.08, 
+            transparent: true, 
+            opacity: 0.6 
+        });
+
+        this.objects.particles = new THREE.Points(geom, mat);
+        this.group.add(this.objects.particles);
+    }
+
+    resetParticle(i, pos) {
+        // Spawn inside feed well
+        const r = Math.random() * 1.0;
+        const theta = Math.random() * Math.PI * 2;
+        pos[i*3] = r * Math.cos(theta);
+        pos[i*3+1] = 3.5 + Math.random(); // Top
+        pos[i*3+2] = r * Math.sin(theta);
+    }
+
+    updateConfig(params, blanketHeightRatio) {
+        this.simParams = params;
+        this.targetBlanketScale = Math.max(0.1, Math.min(3.5, blanketHeightRatio * 3.5)); // Map physics height to 3D height
+    }
+
+    toggleWireframe() {
+        this.state.wireframe = !this.state.wireframe;
+        this.objects.walls.material.wireframe = this.state.wireframe;
+        this.objects.blanket.material.wireframe = this.state.wireframe;
+    }
+
+    resize() {
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        this.camera.aspect = this.width / this.height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(this.width, this.height);
+    }
+
+    animate() {
+        requestAnimationFrame(this.animate);
+
+        // Rotate Rake
+        const rpmRad = (this.simParams.rpm * 2 * Math.PI) / 60; // rad/s
+        this.rakeGroup.rotation.y -= rpmRad * 5; // Speed up for visual effect
+
+        // Animate Blanket Height (Smooth Transition)
+        if (this.objects.blanket) {
+            // Lerp scale
+            const currentY = this.objects.blanket.scale.y;
+            const targetY = this.targetBlanketScale || 0.5;
+            const newY = currentY + (targetY - currentY) * 0.05;
+            
+            this.objects.blanket.scale.y = newY;
+            this.objects.blanket.position.y = (newY * 1.0) / 2; // Keep bottom anchored at 0
+        }
+
+        // Animate Particles
+        if (this.objects.particles) {
+            const positions = this.objects.particles.geometry.attributes.position.array;
+            const blanketTop = this.objects.blanket.scale.y; // approximate visual height
+
+            for(let i=0; i< positions.length/3; i++) {
+                // Gravity
+                positions[i*3+1] -= 0.02 + (Math.random() * 0.01);
+
+                // Radial Spread (as they fall, they move outward from feed well)
+                const x = positions[i*3];
+                const z = positions[i*3+2];
+                const dist = Math.sqrt(x*x + z*z);
+                
+                if (dist < 4.0) {
+                    positions[i*3] *= 1.01; // Expand
+                    positions[i*3+2] *= 1.01;
+                }
+
+                // Hit Blanket logic
+                if (positions[i*3+1] < blanketTop) {
+                    // Slow down significantly inside sludge
+                    positions[i*3+1] += 0.015; 
+                    // Rotate with rake inside blanket
+                    const angle = -0.01;
+                    const nx = x * Math.cos(angle) - z * Math.sin(angle);
+                    const nz = x * Math.sin(angle) + z * Math.cos(angle);
+                    positions[i*3] = nx;
+                    positions[i*3+2] = nz;
+                }
+
+                // Reset if at bottom
+                if(positions[i*3+1] < 0) {
+                    this.resetParticle(i, positions);
+                }
+            }
+            this.objects.particles.geometry.attributes.position.needsUpdate = true;
+        }
+
+        this.controls.update();
+        this.renderer.render(this.scene, this.camera);
+    }
+}
+
+// --- PHYSICS ENGINE ---
+function runPhysics() {
+    // Inputs
+    const flow = parseFloat(document.getElementById('inp-flow').value); // m3/h
+    const tssIn = parseFloat(document.getElementById('inp-tss').value); // %
+    const underflow = parseFloat(document.getElementById('inp-underflow').value); // m3/h
+    const rpm = parseFloat(document.getElementById('inp-rpm').value);
+
+    // Constants
+    const Area = 113.0; // m2 (12m dia)
+    const CaptureEff = 0.95; // 95% capture typical
+
+    // 1. Solids Loading Rate (SLR)
+    // Flow (m3/h) * TSS (%) * 10 (conversion to kg/m3) -> kg/h
+    const solidsLoadKgH = flow * (tssIn * 10); 
+    const slr = solidsLoadKgH / Area; // kg/m2/h
+    
+    // 2. Output Concentration (Mass Balance)
+    // Solids In = Solids Out (Steady State approx)
+    // Solids Out (Underflow) = Solids In * CaptureEff
+    const solidsOutKgH = solidsLoadKgH * CaptureEff;
+    // Conc = Mass / Volume
+    let tssOut = (solidsOutKgH / underflow) / 10; // Back to %
+
+    // Cap realism
+    if (tssOut > 8.0) tssOut = 8.0; // Hard to pump past 8%
+    
+    // 3. Blanket Height Logic
+    // Higher SLR input vs Lower Underflow output = Rising Blanket
+    // Ideal ratio implies Underflow removes solids as fast as they enter
+    const fluxRatio = solidsLoadKgH / (underflow * tssOut * 10); 
+    // Normalized height (0 to 1 = full tank)
+    let blanketH = 0.5 * fluxRatio; 
+    
+    // Septicity / Torque Physics
+    // Viscosity approx increases with concentration
+    const viscosity = 1 + (tssOut * 0.5);
+    const torque = (viscosity * rpm * 5000).toFixed(0); 
+    
+    // --- UI UPDATES ---
+    document.getElementById('out-solid-conc').innerText = tssOut.toFixed(2) + '%';
+    document.getElementById('out-blanket').innerText = (blanketH * 3.5).toFixed(1) + ' m';
+    document.getElementById('out-torque').innerText = torque + ' Nm';
+    document.getElementById('out-slr').innerText = slr.toFixed(1);
+
+    // Risk Analysis
+    const riskEl = document.getElementById('out-risk');
+    const msgEl = document.getElementById('out-status-msg');
+    
+    let risk = "Optimal";
+    let color = "var(--accent-success)";
+    let msg = "• Process stable. Good compaction.";
+
+    // Logic Tree
+    if (blanketH * 3.5 > 3.0) {
+        risk = "Critical"; color = "var(--accent-danger)";
+        msg = "• WASHOUT IMMINENT: Blanket level too high. Increase underflow rate immediately.";
+    } else if (tssOut < 3.0) {
+        risk = "Inefficient"; color = "var(--accent-warn)";
+        msg = "• LOW THICKENING: Sludge too thin. Decrease underflow to increase compaction time.";
+    } else if (tssOut > 6.5 && torque > 3000) {
+        risk = "High Torque"; color = "var(--accent-warn)";
+        msg = "• RAKE STRESS: Sludge too thick. Risk of mechanism failure. Increase underflow.";
+    } else if (flow/underflow > 10) {
+        // High retention
+        msg = "• SEPTICITY RISK: Sludge held too long. Gas bubbles may hinder settling.";
+    }
+
+    riskEl.innerText = risk;
+    riskEl.style.color = color;
+    msgEl.innerText = msg;
+    msgEl.style.color = (risk === "Critical") ? "var(--accent-danger)" : "#fff";
+
+    if(sceneManager) {
+        sceneManager.updateConfig({ flow, tssIn, underflow, rpm }, blanketH);
+    }
+    updateChart(slr, tssOut, tssIn);
+}
+
+function updateChart(currentSLR, currentOut, tssIn) {
+    if(!performanceChart) return;
+    
+    // Generate a curve showing "Expected Output % vs Loading Rate"
+    // Usually, as Loading Rate increases, Compaction decreases slightly
+    const labels = [1, 2, 3, 4, 5, 6, 7, 8]; // kg/m2/h
+    const data = labels.map(l => {
+        // Ideal curve equation approx
+        let val = (tssIn * 5) - (l * 0.2); 
+        if(val < tssIn) val = tssIn;
+        return val;
+    });
+
+    performanceChart.data.datasets[0].data = data;
+    
+    // Highlight current operating point? 
+    // For simplicity in this demo, we just show the curve based on input concentration
+    
+    performanceChart.update();
+}
+
+function initChart() {
+    const ctx = document.getElementById('chart-perf').getContext('2d');
+    performanceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [1, 2, 3, 4, 5, 6, 7, 8],
+            datasets: [{ 
+                label: 'Theoretical Max Conc. (%)', 
+                borderColor: '#00d2ff', backgroundColor: 'rgba(0, 210, 255, 0.1)', 
+                data: [4, 4.5, 5, 5.2, 5.0, 4.5, 4.0, 3.5], fill: true, tension: 0.4 
+            }]
+        },
+        options: { 
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels:{color:'#fff'} } }, 
+            scales: { 
+                y: { grid:{color:'#333'}, title: {display: true, text: 'Underflow Conc (%)', color: '#888'}, ticks:{color:'#aaa'} }, 
+                x: { grid:{color:'#333'}, title: {display: true, text: 'Solids Loading (kg/m²/h)', color: '#888'}, ticks:{color:'#aaa'} } 
+            } 
+        }
+    });
+}
+
+// --- BOILERPLATE ---
+function openSim() {
+    document.getElementById('modal-screen').classList.add('active');
+    if(!sceneManager) {
+        setTimeout(() => {
+            sceneManager = new ThickenerSim('container-sim');
+            initChart();
+            runPhysics();
+            
+            ['inp-flow', 'inp-tss', 'inp-underflow', 'inp-rpm'].forEach(id => {
+                document.getElementById(id).addEventListener('input', (e) => {
+                    document.getElementById(id.replace('inp', 'val')).innerText = e.target.value;
+                    runPhysics();
+                });
+            });
+        }, 100);
+    }
+}
+
+function closeSim() { document.getElementById('modal-screen').classList.remove('active'); }
+
+function resetSim() {
+    document.getElementById('inp-flow').value = DEFAULTS.flow;
+    document.getElementById('inp-tss').value = DEFAULTS.tss;
+    document.getElementById('inp-underflow').value = DEFAULTS.underflow;
+    document.getElementById('inp-rpm').value = DEFAULTS.rpm;
+    
+    // Update labels
+    document.getElementById('val-flow').innerText = DEFAULTS.flow;
+    document.getElementById('val-tss').innerText = DEFAULTS.tss;
+    document.getElementById('val-underflow').innerText = DEFAULTS.underflow;
+    document.getElementById('val-rpm').innerText = DEFAULTS.rpm;
+    
+    runPhysics();
+}
+
+function toggleWireframe() { if(sceneManager) sceneManager.toggleWireframe(); }
+</script>
+</body>
+</html>

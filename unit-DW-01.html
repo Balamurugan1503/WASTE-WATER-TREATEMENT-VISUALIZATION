@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dewatering Digital Twin</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@300;400;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0b0e14;
+            --bg-panel: #151921;
+            --accent-blue: #00d2ff;
+            --accent-amber: #f59e0b; /* Sludge Theme */
+            --accent-danger: #ff4444;
+            --accent-warn: #ffaa00;
+            --accent-success: #00ff9d;
+            --text-main: #e0f2fe;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --font-display: 'Rajdhani', sans-serif;
+            --font-mono: 'Roboto Mono', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-dark); color: var(--text-main); font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+
+        .btn {
+            background: rgba(245, 158, 11, 0.1); border: 1px solid var(--accent-amber); color: var(--accent-amber);
+            padding: 12px 24px; border-radius: 4px; cursor: pointer; font-family: var(--font-display);
+            font-weight: 700; text-transform: uppercase; letter-spacing: 1px; transition: all 0.2s;
+        }
+        .btn:hover { background: var(--accent-amber); color: #000; box-shadow: 0 0 15px var(--accent-amber); }
+
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s ease; }
+        .modal.active { display: flex; opacity: 1; }
+
+        .sim-layout { width: 100%; height: 100%; display: grid; grid-template-columns: 350px 1fr 350px; }
+        .sim-sidebar { background: var(--bg-panel); border-right: 1px solid var(--border); padding: 25px; display: flex; flex-direction: column; overflow-y: auto; z-index: 10; }
+        .sim-sidebar.right { border-left: 1px solid var(--border); border-right: none; }
+        
+        h2 { font-family: var(--font-display); font-size: 1.8rem; color: #fff; margin-bottom: 5px; }
+        h3 { font-family: var(--font-display); font-size: 1.2rem; color: #fff; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 25px; }
+
+        .control-group { margin-bottom: 25px; }
+        .control-label { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 10px; color: var(--text-muted); }
+        .control-val { font-family: var(--font-mono); color: var(--accent-amber); }
+
+        input[type=range] { width: 100%; -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-amber); cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px var(--accent-amber); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #334155; border-radius: 2px; }
+
+        .output-box { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 15px; margin-top: auto; }
+        .output-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; }
+        .output-val { font-family: var(--font-mono); color: #fff; }
+
+        .sim-canvas-container { position: relative; width: 100%; height: 100%; background: radial-gradient(circle at center, #1a202c 0%, #000 100%); }
+        .close-sim { position: absolute; top: 20px; right: 20px; z-index: 20; background: rgba(0,0,0,0.5); border: 1px solid #fff; color: #fff; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: 0.2s; }
+        .close-sim:hover { background: var(--accent-danger); border-color: var(--accent-danger); }
+        .flex-gap { display: flex; gap: 10px; }
+        .w-full { width: 100%; }
+        
+        /* Stats specifically for cake */
+        .cake-indicator {
+            height: 6px; width: 100%; background: #333; border-radius: 3px; margin-top: 5px; overflow: hidden;
+        }
+        .cake-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #f59e0b, #d97706); transition: width 0.5s; }
+    </style>
+</head>
+<body>
+
+    <div style="text-align: center;">
+        <h1 style="font-family: var(--font-display); font-size: 3rem; margin-bottom: 10px;">Sludge Treatment</h1>
+        <p style="color: var(--text-muted); margin-bottom: 30px;">Unit ID: DW-01 | Dewatering Hall</p>
+        <button class="btn" onclick="openSim()">Launch Digital Twin</button>
+    </div>
+
+    <div id="modal-sim" class="modal">
+        <button class="close-sim" onclick="closeSim()">✕</button>
+        
+        <div class="sim-layout">
+            <div class="sim-sidebar">
+                <h2>Belt Filter Press</h2>
+                <p class="subtitle">Physics: Polymer Dosing & Compression</p>
+                
+                <div class="control-group">
+                    <div class="control-label"><span>Sludge Feed (m³/h)</span> <span id="val-flow" class="control-val">25.0</span></div>
+                    <input type="range" id="inp-flow" min="10" max="50" value="25" step="1">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Polymer Dosage (kg/t)</span> <span id="val-poly" class="control-val">4.5</span></div>
+                    <input type="range" id="inp-poly" min="1" max="10" value="4.5" step="0.5">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Belt Speed (m/min)</span> <span id="val-speed" class="control-val">5.0</span></div>
+                    <input type="range" id="inp-speed" min="2" max="15" value="5.0" step="0.5">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Feed Solids (%)</span> <span id="val-solids" class="control-val">3.0</span></div>
+                    <input type="range" id="inp-solids" min="1.0" max="5.0" value="3.0" step="0.1">
+                </div>
+
+                <div class="flex-gap">
+                    <button class="btn w-full" style="border-color:#555; color:#aaa" onclick="resetSim()">Reset Params</button>
+                </div>
+
+                <div class="output-box">
+                    <div class="output-row"><span>Cake Dryness:</span> <span id="out-cake" class="output-val" style="color:var(--accent-amber)">--%</span></div>
+                    <div class="cake-indicator"><div id="bar-cake" class="cake-bar"></div></div>
+                    <div style="margin-bottom: 10px;"></div>
+                    
+                    <div class="output-row"><span>Filtrate Turbidity:</span> <span id="out-filt" class="output-val">-- NTU</span></div>
+                    <div class="output-row"><span>Capture Efficiency:</span> <span id="out-eff" class="output-val">--%</span></div>
+                    <div class="output-row"><span>Throughput:</span> <span id="out-mass" class="output-val">-- kg/h</span></div>
+
+                    <div class="output-row" style="margin-top:10px; border-top:1px dashed #444; padding-top:10px;">
+                        <span id="out-status" style="font-size:0.8em; line-height:1.4">System Standby...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sim-canvas-container" id="container-sim"></div>
+            
+            <div class="sim-sidebar right">
+                <h3>Performance Analytics</h3>
+                <canvas id="chart-main" height="250"></canvas>
+                
+                <div style="margin-top:20px; font-size:0.85rem; color:var(--text-muted); line-height: 1.6;">
+                    <strong>Process Overview:</strong><br>
+                    Digested sludge is conditioned with polymer to flocculate solids. The Belt Filter Press applies increasing pressure to separate water (filtrate) from solids (cake).<br><br>
+                    
+                    <strong>Optimization Logic:</strong><br>
+                    • Low Polymer = Poor flocculation & wet cake.<br>
+                    • High Belt Speed = Low residence time & wet cake.<br>
+                    • Target Cake Solids: <strong>18-25%</strong>
+                </div>
+                
+                <div style="margin-top:20px;">
+                    <button class="btn w-full" style="font-size:0.8rem" onclick="toggleView()">Toggle Wireframe Mode</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// --- CONFIGURATION ---
+const DEFAULTS = { flow: 25.0, poly: 4.5, speed: 5.0, solids: 3.0 };
+let sceneManager = null;
+let performanceChart = null;
+
+class DewateringSimulator {
+    constructor(containerId) {
+        this.container = document.getElementById(containerId);
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        
+        this.scene = new THREE.Scene();
+        this.camera = new THREE.PerspectiveCamera(45, this.width / this.height, 0.1, 100);
+        this.camera.position.set(6, 4, 8);
+        this.camera.lookAt(0, 0, 0);
+        
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(this.width, this.height);
+        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.container.appendChild(this.renderer.domElement);
+        
+        // Lighting
+        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+        const dirLight = new THREE.DirectionalLight(0xffaa00, 1); // Amber tint
+        dirLight.position.set(5, 10, 5);
+        this.scene.add(ambient, dirLight);
+
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+
+        this.rollers = [];
+        this.beltGroup = new THREE.Group();
+        this.scene.add(this.beltGroup);
+
+        this.simParams = { ...DEFAULTS };
+        
+        this.initMachine();
+        this.initParticles();
+        
+        window.addEventListener('resize', () => this.resize());
+        this.animate = this.animate.bind(this);
+        requestAnimationFrame(this.animate);
+    }
+
+    initMachine() {
+        const rollerMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.4, metalness: 0.8 });
+        const frameMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+
+        // Create zigzag rollers
+        const rollerPositions = [
+            {x: -3, y: 1}, {x: -1.5, y: -0.5}, {x: 0, y: 1}, {x: 1.5, y: -0.5}, {x: 3, y: 1}
+        ];
+
+        rollerPositions.forEach(pos => {
+            const roller = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.2, 32), rollerMat);
+            roller.rotation.x = Math.PI/2;
+            roller.position.set(pos.x, pos.y, 0);
+            this.beltGroup.add(roller);
+            this.rollers.push(roller);
+        });
+
+        // Frame
+        const frameL = new THREE.Mesh(new THREE.BoxGeometry(7, 0.2, 0.2), frameMat);
+        frameL.position.set(0, -1.2, 1.2);
+        const frameR = new THREE.Mesh(new THREE.BoxGeometry(7, 0.2, 0.2), frameMat);
+        frameR.position.set(0, -1.2, -1.2);
+        this.beltGroup.add(frameL, frameR);
+
+        // Cake Hopper at end
+        const hopperGeo = new THREE.BoxGeometry(1.5, 0.5, 2);
+        const hopper = new THREE.Mesh(hopperGeo, new THREE.MeshStandardMaterial({ color: 0x333333 }));
+        hopper.position.set(4, -2, 0);
+        hopper.rotation.z = -0.2;
+        this.beltGroup.add(hopper);
+    }
+
+    initParticles() {
+        this.particleCount = 4000;
+        const geo = new THREE.BufferGeometry();
+        const pos = new Float32Array(this.particleCount * 3);
+        const col = new Float32Array(this.particleCount * 3);
+        
+        this.particleData = [];
+
+        for(let i=0; i<this.particleCount; i++) {
+            this.resetParticle(i, pos, true);
+            pos[i*3] = -50; // Hide initially
+            this.particleData.push({ 
+                phase: 'feed', // feed, compression, cake, filtrate
+                t: Math.random(),
+                offset: (Math.random() - 0.5) * 1.8 
+            });
+        }
+
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        
+        this.particleSystem = new THREE.Points(geo, new THREE.PointsMaterial({ 
+            size: 0.1, vertexColors: true, transparent: true, opacity: 0.8 
+        }));
+        this.scene.add(this.particleSystem);
+    }
+
+    resetParticle(i, pos, init = false) {
+        if(init) {
+            pos[i*3] = -4; pos[i*3+1] = 2; pos[i*3+2] = 0;
+        } else {
+            // Start at feed inlet
+            pos[i*3] = -4 + (Math.random() * 0.5); 
+            pos[i*3+1] = 2; 
+            pos[i*3+2] = (Math.random() - 0.5) * 1.8;
+        }
+    }
+
+    updateConfig(params) {
+        this.simParams = params;
+    }
+
+    animate() {
+        requestAnimationFrame(this.animate);
+        
+        const positions = this.particleSystem.geometry.attributes.position.array;
+        const colors = this.particleSystem.geometry.attributes.color.array;
+        const { speed, poly, flow } = this.simParams;
+
+        // Visual rotation of rollers
+        const rotSpeed = speed * 0.02;
+        this.rollers.forEach((r, idx) => {
+            r.rotation.y += (idx % 2 === 0) ? rotSpeed : -rotSpeed;
+        });
+
+        // Determine quality based on inputs
+        // High Speed = Wet Cake (Bad). High Poly = Dry Cake (Good).
+        const conditioningQuality = Math.min(1.0, poly / 6.0); 
+        const residenceTime = 15.0 / speed;
+        const flocStrength = conditioningQuality * 0.8; 
+
+        // Particle Animation Loop
+        // Flow rate determines how many particles are active
+        const activeCount = Math.min(this.particleCount, flow * 60);
+
+        for(let i=0; i<this.particleCount; i++) {
+            if(i > activeCount) { positions[i*3] = -50; continue; }
+            if(positions[i*3] === -50) this.resetParticle(i, positions);
+
+            const p = this.particleData[i];
+            
+            // Movement along the belt path (Simplified sine wave path)
+            if(p.phase !== 'dropped') {
+                positions[i*3] += (speed * 0.005); // Move X
+                
+                const x = positions[i*3];
+                
+                // Y Position follows rollers approximately
+                if(x < 3.5) {
+                    positions[i*3+1] = 1.0 + Math.sin(x * 2) * 0.8;
+                }
+
+                // Color Logic: Dark Brown (Wet) -> Amber/Orange (Dry)
+                if(x < -2) {
+                    // Feed Zone
+                    colors[i*3] = 0.2; colors[i*3+1] = 0.1; colors[i*3+2] = 0.0; // Dark sludge
+                } else if (x < 3) {
+                    // Compression Zone - Check for filtrate separation
+                    // If floc strength is low, particles might turn into filtrate
+                    if(Math.random() > 0.99 - (residenceTime * 0.001)) {
+                        // Create a filtrate drip
+                        p.phase = 'filtrate';
+                    }
+                    
+                    // Gradual color change to cake
+                    const dryRatio = (x + 3) / 6;
+                    colors[i*3] = 0.2 + (dryRatio * 0.6); // R
+                    colors[i*3+1] = 0.1 + (dryRatio * 0.3); // G
+                } else {
+                    // Discharge Zone
+                    colors[i*3] = 0.9; colors[i*3+1] = 0.6; colors[i*3+2] = 0.1; // Dry cake
+                    p.phase = 'cake';
+                }
+            }
+
+            // Gravity for cake and filtrate
+            if(positions[i*3] > 3.5 && p.phase === 'cake') {
+                positions[i*3] += 0.02; // slight forward momentum
+                positions[i*3+1] -= 0.15; // Gravity fall
+                if(positions[i*3+1] < -3) this.resetParticle(i, positions);
+            }
+
+            // Gravity for Filtrate (Water dripping)
+            if(p.phase === 'filtrate') {
+                positions[i*3+1] -= 0.2; // Fast drip
+                colors[i*3] = 0.5; colors[i*3+1] = 0.5; colors[i*3+2] = 0.6; // Grey/Blue water
+                if(positions[i*3+1] < -2) {
+                    p.phase = 'feed'; // Reset logic
+                    positions[i*3] = -50; // Hide until reset
+                }
+            }
+        }
+
+        this.particleSystem.geometry.attributes.position.needsUpdate = true;
+        this.particleSystem.geometry.attributes.color.needsUpdate = true;
+        
+        this.renderer.render(this.scene, this.camera);
+        this.controls.update();
+    }
+    
+    toggleView() {
+        this.rollers.forEach(r => {
+            r.material.wireframe = !r.material.wireframe;
+        });
+    }
+
+    resize() {
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        this.camera.aspect = this.width / this.height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(this.width, this.height);
+    }
+}
+
+// --- PHYSICS ENGINE ---
+function runPhysics() {
+    const flow = parseFloat(document.getElementById('inp-flow').value);
+    const poly = parseFloat(document.getElementById('inp-poly').value);
+    const speed = parseFloat(document.getElementById('inp-speed').value);
+    const feedSolids = parseFloat(document.getElementById('inp-solids').value);
+
+    // 1. Calculate Solids Loading (kg/h)
+    // Flow (m3/h) * Solids (%) * 10 (approx density conversion factor)
+    const massLoading = flow * feedSolids * 10;
+
+    // 2. Physics: Cake Dryness Calculation
+    // Base dryness: ~12%
+    // Polymer Bonus: Up to +8% (diminishing returns after 6kg/t)
+    // Speed Penalty: Faster speed = wetter cake (-0.5% per m/min over 4)
+    
+    let polyFactor = Math.min(8, poly * 1.2); 
+    if (poly > 7) polyFactor -= (poly - 7) * 0.5; // Overdosing penalty (slippage)
+
+    let speedPenalty = Math.max(0, (speed - 4) * 0.6);
+    
+    let cakeDryness = 12 + polyFactor - speedPenalty + (feedSolids * 0.5);
+    // Clamp realistic values
+    cakeDryness = Math.max(12, Math.min(28, cakeDryness));
+
+    // 3. Physics: Capture Efficiency
+    // Higher polymer = better capture. High speed = lower capture.
+    let captureEff = 90 + (poly * 1.5) - (speed * 0.5);
+    captureEff = Math.min(99.5, captureEff);
+
+    // 4. Filtrate Turbidity (NTU)
+    // Inverse of capture efficiency
+    let turbidity = (100 - captureEff) * 20 + 5; 
+
+    // Update UI
+    const cakeEl = document.getElementById('out-cake');
+    cakeEl.innerText = cakeDryness.toFixed(1) + '%';
+    document.getElementById('bar-cake').style.width = ((cakeDryness - 10) / 20 * 100) + '%'; // Visual bar
+
+    document.getElementById('out-filt').innerText = turbidity.toFixed(0) + ' NTU';
+    document.getElementById('out-eff').innerText = captureEff.toFixed(1) + '%';
+    document.getElementById('out-mass').innerText = massLoading.toFixed(0) + ' kg/h';
+
+    // Status & Logic
+    const statusEl = document.getElementById('out-status');
+    let statusText = "• SYSTEM OPTIMAL";
+    let statusColor = "#fff";
+
+    if (cakeDryness < 18) {
+        statusText = "• ALERT: Wet Cake. Increase Polymer or reduce Belt Speed.";
+        statusColor = "var(--accent-danger)";
+        cakeEl.style.color = "var(--accent-danger)";
+    } else if (poly > 8) {
+        statusText = "• WARNING: Polymer Overdose likely (Slippage risk).";
+        statusColor = "var(--accent-warn)";
+        cakeEl.style.color = "var(--accent-amber)";
+    } else {
+        cakeEl.style.color = "var(--accent-success)";
+    }
+    
+    statusEl.innerText = statusText;
+    statusEl.style.color = statusColor;
+
+    // Update 3D Scene
+    if(sceneManager) {
+        sceneManager.updateConfig({ flow, poly, speed, feedSolids });
+    }
+    
+    // Update Chart
+    updateChart(poly);
+}
+
+// --- CHARTING ---
+function updateChart(currentPoly) {
+    if(!performanceChart) return;
+    
+    // Plot: Polymer Dosage (X) vs Cake Dryness (Y) curve
+    const labels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const data = labels.map(p => {
+        // Simple simulation of the dosage curve using current fixed speed
+        const speed = parseFloat(document.getElementById('inp-speed').value);
+        let pf = Math.min(8, p * 1.2);
+        if(p>7) pf -= (p-7)*0.5;
+        let sp = Math.max(0, (speed - 4) * 0.6);
+        return 12 + pf - sp + 1.5; // +1.5 assumed feed constant
+    });
+
+    performanceChart.data.labels = labels;
+    performanceChart.data.datasets[0].data = data;
+    
+    // Highlight current point logic could be added here
+    performanceChart.update();
+}
+
+function initChart() {
+    const ctx = document.getElementById('chart-main').getContext('2d');
+    performanceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{ 
+                label: 'Predicted Cake Solids (%)', 
+                borderColor: '#f59e0b', 
+                backgroundColor: 'rgba(245, 158, 11, 0.1)', 
+                data: [], 
+                fill: true, 
+                tension: 0.4 
+            }]
+        },
+        options: { 
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels:{color:'#fff'} } }, 
+            scales: { 
+                y: { grid:{color:'#333'}, title: {display: true, text: 'Dryness (%)', color: '#888'}, ticks:{color:'#aaa'} }, 
+                x: { grid:{color:'#333'}, title: {display: true, text: 'Polymer (kg/t)', color: '#888'}, ticks:{color:'#aaa'} } 
+            } 
+        }
+    });
+}
+
+// --- MAIN CONTROLLERS ---
+function openSim() {
+    document.getElementById('modal-sim').classList.add('active');
+    if(!sceneManager) {
+        setTimeout(() => {
+            sceneManager = new DewateringSimulator('container-sim');
+            initChart();
+            runPhysics();
+            
+            ['inp-flow', 'inp-poly', 'inp-speed', 'inp-solids'].forEach(id => {
+                document.getElementById(id).addEventListener('input', (e) => {
+                    document.getElementById(id.replace('inp', 'val')).innerText = e.target.value;
+                    runPhysics();
+                });
+            });
+        }, 100);
+    }
+}
+
+function closeSim() { document.getElementById('modal-sim').classList.remove('active'); }
+
+function resetSim() {
+    document.getElementById('inp-flow').value = DEFAULTS.flow;
+    document.getElementById('inp-poly').value = DEFAULTS.poly;
+    document.getElementById('inp-speed').value = DEFAULTS.speed;
+    document.getElementById('inp-solids').value = DEFAULTS.solids;
+    
+    // Update Text labels
+    ['flow', 'poly', 'speed', 'solids'].forEach(k => {
+        document.getElementById(`val-${k}`).innerText = DEFAULTS[k];
+    });
+    
+    runPhysics();
+}
+
+function toggleView() { if(sceneManager) sceneManager.toggleView(); }
+</script>
+</body>
+</html>

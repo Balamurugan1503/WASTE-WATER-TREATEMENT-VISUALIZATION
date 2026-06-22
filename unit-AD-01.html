@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anaerobic Digester Digital Twin - Process Model</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@300;400;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0b0e14;
+            --bg-panel: #151921;
+            --accent-blue: #00d2ff;
+            --accent-green: #00ff9d;
+            --accent-warn: #ffaa00;
+            --accent-danger: #ff4444;
+            --accent-gas: #e6ff00; /* Yellow for Biogas */
+            --text-main: #e0f2fe;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --font-display: 'Rajdhani', sans-serif;
+            --font-mono: 'Roboto Mono', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-dark); color: var(--text-main); font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+
+        /* --- Buttons & Modal --- */
+        .btn {
+            background: rgba(0, 210, 255, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue);
+            padding: 12px 24px; border-radius: 4px; cursor: pointer; font-family: var(--font-display);
+            font-weight: 700; text-transform: uppercase; letter-spacing: 1px; transition: all 0.2s;
+        }
+        .btn:hover { background: var(--accent-blue); color: #000; box-shadow: 0 0 15px var(--accent-blue); }
+
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s ease; }
+        .modal.active { display: flex; opacity: 1; }
+
+        /* --- Simulation Layout --- */
+        .sim-layout { width: 100%; height: 100%; display: grid; grid-template-columns: 360px 1fr 350px; }
+        .sim-sidebar { background: var(--bg-panel); border-right: 1px solid var(--border); padding: 25px; display: flex; flex-direction: column; overflow-y: auto; z-index: 10; }
+        .sim-sidebar.right { border-left: 1px solid var(--border); border-right: none; }
+        
+        /* --- Typography --- */
+        h2 { font-family: var(--font-display); font-size: 1.8rem; color: #fff; margin-bottom: 5px; }
+        h3 { font-family: var(--font-display); font-size: 1.1rem; color: var(--text-muted); margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 5px; letter-spacing: 1px; text-transform: uppercase; }
+        .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px; }
+        .id-badge { display: inline-block; background: #333; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; font-family: var(--font-mono); color: #aaa; margin-bottom: 10px; }
+
+        /* --- Inputs --- */
+        .control-group { margin-bottom: 15px; }
+        .control-label { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 5px; color: var(--text-muted); }
+        .control-val { font-family: var(--font-mono); color: var(--accent-blue); }
+
+        input[type=range] { width: 100%; -webkit-appearance: none; appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { 
+            -webkit-appearance: none; appearance: none; height: 14px; width: 14px; border-radius: 50%; 
+            background: #fff; cursor: pointer; margin-top: -5px; box-shadow: 0 0 5px rgba(255,255,255,0.5); 
+        }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #334155; border-radius: 2px; }
+
+        /* Custom colored sliders for Biology */
+        #inp-temp::-webkit-slider-thumb { background: var(--accent-warn); box-shadow: 0 0 5px var(--accent-warn); }
+        #inp-retention::-webkit-slider-thumb { background: var(--accent-green); box-shadow: 0 0 5px var(--accent-green); }
+
+        /* --- Output Panel --- */
+        .output-box { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 15px; margin-top: auto; }
+        .output-section-title { font-size: 0.75rem; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
+        .output-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.9rem; }
+        .output-val { font-family: var(--font-mono); color: #fff; }
+        
+        .sim-canvas-container { position: relative; width: 100%; height: 100%; background: radial-gradient(circle at center, #2d3748 0%, #000 100%); }
+        .close-sim { position: absolute; top: 20px; right: 20px; z-index: 20; background: rgba(0,0,0,0.5); border: 1px solid #fff; color: #fff; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: 0.2s; }
+        .close-sim:hover { background: var(--accent-danger); border-color: var(--accent-danger); }
+        
+        .flex-gap { display: flex; gap: 10px; margin-top: 15px;}
+        .w-full { width: 100%; }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+    <div style="text-align: center;">
+        <h1 style="font-family: var(--font-display); font-size: 3.5rem; margin-bottom: 10px; color: var(--accent-gas);">Wastewater Digital Twin</h1>
+        <h2 style="font-family: var(--font-display); font-size: 1.5rem; color: var(--text-main); margin-bottom: 30px; font-weight: 400;">Unit Operation: Anaerobic Digestion</h2>
+        <button class="btn" onclick="openSim()">Initialize Simulation</button>
+    </div>
+
+    <div id="modal-screen" class="modal">
+        <button class="close-sim" onclick="closeSim()">✕</button>
+        
+        <div class="sim-layout">
+            <div class="sim-sidebar">
+                <div class="id-badge">ID: AD-01</div>
+                <h2>Digester Control</h2>
+                <p class="subtitle">Mesophilic sludge stabilization & biogas recovery.</p>
+                
+                <h3>Process Inputs</h3>
+                <div class="control-group">
+                    <div class="control-label"><span>Sludge Feed (m³/d)</span> <span id="val-feed" class="control-val">150</span></div>
+                    <input type="range" id="inp-feed" min="50" max="300" value="150" step="10">
+                </div>
+                <div class="control-group">
+                    <div class="control-label"><span>Retention Time (days)</span> <span id="val-retention" class="control-val" style="color:var(--accent-green)">20</span></div>
+                    <input type="range" id="inp-retention" min="5" max="40" value="20" step="1">
+                </div>
+                <div class="control-group">
+                    <div class="control-label"><span>Temperature (°C)</span> <span id="val-temp" class="control-val" style="color:var(--accent-warn)">35.0</span></div>
+                    <input type="range" id="inp-temp" min="20" max="50" value="35" step="0.5">
+                </div>
+
+                <h3>Feed Characteristics</h3>
+                <div class="control-group">
+                    <div class="control-label"><span>Total Solids (%)</span> <span id="val-ts" class="control-val">5.0</span></div>
+                    <input type="range" id="inp-ts" min="2" max="10" value="5" step="0.1">
+                </div>
+                <div class="control-group">
+                    <div class="control-label"><span>Volatile Fraction (%)</span> <span id="val-vs" class="control-val">75</span></div>
+                    <input type="range" id="inp-vs" min="50" max="90" value="75" step="1">
+                </div>
+
+                <div class="flex-gap">
+                    <button class="btn w-full" style="border-color:#555; color:#aaa; font-size:0.8rem; padding:8px;" onclick="resetSim()">Reset Defaults</button>
+                </div>
+
+                <div class="output-box">
+                    <div class="output-section-title">Performance</div>
+                    <div class="output-row"><span>VS Reduction:</span> <span id="out-vsr" class="output-val" style="color:var(--accent-green)">-- %</span></div>
+                    <div class="output-row"><span>Methane (CH4):</span> <span id="out-methane" class="output-val">-- %</span></div>
+                    
+                    <div style="margin: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1);"></div>
+
+                    <div class="output-section-title">Energy Recovery</div>
+                    <div class="output-row"><span>Biogas Yield:</span> <span id="out-yield" class="output-val" style="color:var(--accent-gas)">-- m³/d</span></div>
+                    <div class="output-row"><span>Power Output:</span> <span id="out-power" class="output-val" style="color:var(--accent-blue)">-- kWh/d</span></div>
+                    
+                    <div class="output-row" style="margin-top:10px; border-top:1px dashed #444; padding-top:10px;">
+                        <span id="out-status" style="font-size:0.8em; line-height:1.4">Initializing biology...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sim-canvas-container" id="container-sim"></div>
+            
+            <div class="sim-sidebar right">
+                <h3>Bio-Kinetics</h3>
+                <canvas id="chart-main" height="250"></canvas>
+                
+                <div style="margin-top:20px; font-size:0.85rem; color:var(--text-muted); line-height: 1.6;">
+                    <strong>Process Notes:</strong><br>
+                    <ul style="padding-left: 20px; margin-top: 5px;">
+                        <li><strong>Temp Sensitivity:</strong> Optimal mesophilic range is 35-37°C. Deviation drops efficiency.</li>
+                        <li><strong>SRT:</strong> Longer retention improves VSR but requires larger volume capacity.</li>
+                        <li><strong>Biogas:</strong> Calculated based on VS destroyed (approx 0.9 m³ gas / kg VS destroyed).</li>
+                    </ul>
+                </div>
+                
+                <div style="margin-top:auto;">
+                    <button class="btn w-full" style="font-size:0.8rem" onclick="toggleXRay()">Toggle X-Ray Tank</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// --- CONFIGURATION ---
+const DEFAULTS = { feed: 150, retention: 20, temp: 35.0, ts: 5.0, vs: 75 };
+
+let sceneManager = null;
+let performanceChart = null;
+
+// --- 3D ENGINE (THREE.JS) ---
+class DigesterSimulator {
+    constructor(containerId) {
+        this.container = document.getElementById(containerId);
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        
+        this.scene = new THREE.Scene();
+        // Camera setup for large structure view
+        this.camera = new THREE.PerspectiveCamera(45, this.width / this.height, 0.1, 100);
+        this.camera.position.set(8, 6, 8);
+        this.camera.lookAt(0, 1, 0);
+        
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(this.width, this.height);
+        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.container.appendChild(this.renderer.domElement);
+        
+        // Lighting
+        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(5, 10, 5);
+        
+        // Accent light for biogas dome
+        const gasLight = new THREE.PointLight(0xe6ff00, 0.5, 10);
+        gasLight.position.set(0, 4, 0);
+        
+        this.scene.add(ambient, dirLight, gasLight);
+
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+        this.controls.maxPolarAngle = Math.PI / 1.8; // Don't allow going below ground
+
+        this.objects = {};
+        this.state = { xray: false, mixerAngle: 0 };
+        this.gasParticles = [];
+        
+        this.initGeometry();
+        this.initGasSystem();
+        
+        window.addEventListener('resize', () => this.resize());
+        this.animate = this.animate.bind(this);
+        requestAnimationFrame(this.animate);
+    }
+
+    initGeometry() {
+        this.tankGroup = new THREE.Group();
+        this.scene.add(this.tankGroup);
+
+        // Materials
+        this.matSteel = new THREE.MeshStandardMaterial({ color: 0x4a5568, roughness: 0.4, metalness: 0.6, side: THREE.DoubleSide });
+        this.matConcrete = new THREE.MeshStandardMaterial({ color: 0x2d3748, roughness: 0.9 });
+        this.matSludge = new THREE.MeshPhysicalMaterial({ color: 0x3e2723, roughness: 0.8, transmission: 0, opacity: 0.95 });
+        this.matDome = new THREE.MeshStandardMaterial({ color: 0xe6ff00, roughness: 0.3, metalness: 0.2, transparent: true, opacity: 0.9 }); // Gas holder color
+
+        // 1. Base/Foundation
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 4.8, 0.5, 32), this.matConcrete);
+        base.position.y = -0.25;
+        this.tankGroup.add(base);
+
+        // 2. Main Tank Walls
+        // Cylinder geometry: radiusTop, radiusBottom, height, segments
+        const tankGeo = new THREE.CylinderGeometry(4, 4, 5, 32, 1, true); // Open ended
+        this.objects.tankWall = new THREE.Mesh(tankGeo, this.matSteel);
+        this.objects.tankWall.position.y = 2.5;
+        this.tankGroup.add(this.objects.tankWall);
+
+        // 3. Sludge Volume (Inside)
+        const sludgeGeo = new THREE.CylinderGeometry(3.9, 3.9, 4, 32);
+        this.objects.sludge = new THREE.Mesh(sludgeGeo, this.matSludge);
+        this.objects.sludge.position.y = 2.0; // Fill level
+        this.tankGroup.add(this.objects.sludge);
+
+        // 4. Gas Dome (Top)
+        const domeGeo = new THREE.SphereGeometry(4, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.5);
+        this.objects.dome = new THREE.Mesh(domeGeo, this.matDome);
+        this.objects.dome.position.y = 5;
+        this.tankGroup.add(this.objects.dome);
+
+        // 5. Mixer Assembly
+        this.mixerGroup = new THREE.Group();
+        // Shaft
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 6, 8), new THREE.MeshStandardMaterial({color: 0x888888}));
+        shaft.position.y = 3;
+        this.mixerGroup.add(shaft);
+        // Blades
+        const bladeGeo = new THREE.BoxGeometry(3, 0.1, 0.4);
+        const b1 = new THREE.Mesh(bladeGeo, new THREE.MeshStandardMaterial({color: 0xaaaaaa}));
+        b1.position.y = 1;
+        const b2 = new THREE.Mesh(bladeGeo, new THREE.MeshStandardMaterial({color: 0xaaaaaa}));
+        b2.position.y = 2.5;
+        b2.rotation.y = Math.PI / 2;
+        this.mixerGroup.add(b1, b2);
+        
+        this.tankGroup.add(this.mixerGroup);
+    }
+
+    initGasSystem() {
+        // Create bubbling effect
+        const count = 200;
+        const geo = new THREE.SphereGeometry(0.05, 4, 4);
+        const mat = new THREE.MeshBasicMaterial({ color: 0xccff00, transparent: true, opacity: 0.6 });
+        
+        this.objects.bubbles = new THREE.InstancedMesh(geo, mat, count);
+        this.tankGroup.add(this.objects.bubbles);
+        
+        for(let i=0; i<count; i++) {
+            this.resetBubble(i);
+        }
+    }
+
+    resetBubble(i) {
+        // Random position inside cylinder
+        const r = Math.random() * 3.5;
+        const theta = Math.random() * Math.PI * 2;
+        const x = r * Math.cos(theta);
+        const z = r * Math.sin(theta);
+        const y = Math.random() * 4; // Start anywhere in sludge
+        
+        const speed = 0.02 + Math.random() * 0.05;
+        
+        this.gasParticles[i] = { x, y, z, speed, theta, r };
+    }
+
+    updateConfig(productionRate) {
+        // productionRate (0.0 to 1.0) controls animation speed/bubble density visual
+        this.simRate = productionRate;
+    }
+
+    toggleXRay() {
+        this.state.xray = !this.state.xray;
+        
+        // Toggle Tank Wall opacity
+        this.objects.tankWall.material.transparent = this.state.xray;
+        this.objects.tankWall.material.opacity = this.state.xray ? 0.1 : 1.0;
+        this.objects.tankWall.material.needsUpdate = true;
+
+        // Toggle Sludge opacity
+        this.objects.sludge.material.opacity = this.state.xray ? 0.6 : 0.95;
+        this.objects.sludge.material.transmission = this.state.xray ? 0.5 : 0;
+        this.objects.sludge.material.needsUpdate = true;
+    }
+
+    resize() {
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        this.camera.aspect = this.width / this.height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(this.width, this.height);
+    }
+
+    animate() {
+        requestAnimationFrame(this.animate);
+        
+        // 1. Mixer Rotation
+        this.mixerGroup.rotation.y += 0.01;
+
+        // 2. Gas Bubble Animation
+        const dummy = new THREE.Object3D();
+        const bubbleSpeedMult = (this.simRate || 0.5) * 2;
+
+        for(let i=0; i<this.gasParticles.length; i++) {
+            let p = this.gasParticles[i];
+            
+            // Rise
+            p.y += p.speed * bubbleSpeedMult;
+            
+            // Swirl slightly with mixer
+            p.theta += 0.005;
+            const x = p.r * Math.cos(p.theta);
+            const z = p.r * Math.sin(p.theta);
+
+            // Reset if hits dome
+            if(p.y > 4.5) {
+                this.resetBubble(i);
+                p.y = 0.1; 
+            }
+
+            dummy.position.set(x, p.y, z);
+            
+            // Scale bubbles based on height (expansion)
+            const s = 1.0 + (p.y * 0.2);
+            dummy.scale.set(s, s, s);
+            
+            dummy.updateMatrix();
+            this.objects.bubbles.setMatrixAt(i, dummy.matrix);
+        }
+        this.objects.bubbles.instanceMatrix.needsUpdate = true;
+
+        this.controls.update();
+        this.renderer.render(this.scene, this.camera);
+    }
+}
+
+// --- PHYSICS & BIOLOGY CALCULATIONS ---
+
+function runPhysics() {
+    // 1. Get Inputs
+    const feed = parseFloat(document.getElementById('inp-feed').value); // m3/d
+    const retention = parseFloat(document.getElementById('inp-retention').value); // days
+    const temp = parseFloat(document.getElementById('inp-temp').value); // C
+    const ts = parseFloat(document.getElementById('inp-ts').value); // %
+    const vs = parseFloat(document.getElementById('inp-vs').value); // % of TS
+
+    // 2. Bio-Kinetic Calculations
+    
+    // Temperature Efficiency Factor (Bell curve peaking at 37C)
+    // Gaussian: e^(-(x-37)^2 / 2*sigma^2)
+    const optimalTemp = 37;
+    const sigma = 5; // tolerance
+    let tempEff = Math.exp(-Math.pow(temp - optimalTemp, 2) / (2 * Math.pow(sigma, 2)));
+    if (temp > 45) tempEff = tempEff * 0.5; // Thermophilic transition gap penalty
+    
+    // Retention Time Efficiency (Logarithmic growth)
+    // 20 days is roughly standard. Less drops sharply.
+    let srtEff = 1 - Math.exp(-0.15 * (retention - 2)); 
+    if(srtEff < 0) srtEff = 0;
+    if(srtEff > 0.95) srtEff = 0.95; // Max theoretical
+
+    // Combined Volatile Solids Reduction (VSR)
+    // Max VSR typically around 60-70% for standard sludge
+    const maxVsr = 0.65;
+    const actualVsr = maxVsr * srtEff * tempEff;
+
+    // 3. Methane & Biogas Generation
+    // Feed Mass Calculations
+    const sludgeDensity = 1020; // kg/m3
+    const massFlow = feed * sludgeDensity;
+    const tsLoad = massFlow * (ts / 100); // kgTS/d
+    const vsLoad = tsLoad * (vs / 100); // kgVS/d
+
+    const vsDestroyed = vsLoad * actualVsr;
+    
+    // Yield: approx 0.9 - 1.0 m3 biogas per kg VS destroyed
+    const specificGasYield = 0.95; 
+    const biogasYield = vsDestroyed * specificGasYield; // m3/d
+
+    // Methane Content (Sensitive to Temp stability)
+    // Optimal is 65%, stressed is 50-55%
+    const ch4Content = 50 + (15 * tempEff);
+
+    // Energy Calculation
+    // 1 m3 Methane ~ 10 kWh -> Efficiency ~35% (GenSet)
+    const methaneVol = biogasYield * (ch4Content / 100);
+    const kwhPerM3CH4 = 10;
+    const genEfficiency = 0.38;
+    const powerGen = methaneVol * kwhPerM3CH4 * genEfficiency;
+
+    // 4. Update UI Outputs
+    document.getElementById('out-vsr').innerText = (actualVsr * 100).toFixed(1) + ' %';
+    document.getElementById('out-methane').innerText = ch4Content.toFixed(1) + ' %';
+    document.getElementById('out-yield').innerText = Math.round(biogasYield) + ' m³/d';
+    document.getElementById('out-power').innerText = Math.round(powerGen) + ' kWh/d';
+
+    // 5. Status Logic
+    const statusEl = document.getElementById('out-status');
+    let statusText = "";
+    let statusColor = "#fff";
+
+    // OLR Check (Organic Loading Rate) - approx calc
+    const digesterVol = feed * retention;
+    const olr = vsLoad / digesterVol; // kgVS/m3/d
+
+    if (temp < 30) {
+        statusText = "⚠ WARNING: Temp too low. Biology inactive.";
+        statusColor = "#ffaa00";
+    } else if (temp > 42 && temp < 48) {
+        statusText = "⚠ CRITICAL: Temp in transition gap. Foam risk.";
+        statusColor = "#ff4444";
+    } else if (retention < 10) {
+        statusText = "⚠ CRITICAL: Washout risk! SRT < 10d.";
+        statusColor = "#ff4444";
+    } else if (olr > 4.5) {
+        statusText = "⚠ WARNING: High Acidosis Risk (OLR > 4.5).";
+        statusColor = "#ffaa00";
+    } else {
+        statusText = "• Digestion Stable.\n• Gas Production Nominal.";
+        statusColor = "#00ff9d";
+    }
+    statusEl.innerText = statusText;
+    statusEl.style.color = statusColor;
+
+    // 6. Update Visuals
+    if(sceneManager) {
+        // Pass "Health" (0 to 1) to visualizer to control bubble speed
+        sceneManager.updateConfig(actualVsr / maxVsr);
+    }
+    updateChart(temp, tempEff);
+}
+
+// --- CHARTING ---
+
+function updateChart(currentTemp, currentEff) {
+    if(!performanceChart) return;
+
+    // Generate Temperature vs Efficiency Curve
+    // Range 20C to 50C
+    const temps = [];
+    const effs = [];
+    
+    const optimal = 37;
+    const sigma = 5;
+
+    for(let t=20; t<=50; t+=2) {
+        temps.push(t);
+        // Calculate curve
+        let eff = Math.exp(-Math.pow(t - optimal, 2) / (2 * Math.pow(sigma, 2))) * 100;
+        if(t > 45) eff = eff * 0.5;
+        effs.push(eff);
+    }
+
+    performanceChart.data.labels = temps;
+    performanceChart.data.datasets[0].data = effs;
+    
+    // Highlight current operating point
+    // This is a simple static curve, but shows where the user sits
+    performanceChart.update();
+}
+
+function initChart() {
+    const ctx = document.getElementById('chart-main').getContext('2d');
+    performanceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{ 
+                label: 'Bacteria Efficiency (%)', 
+                borderColor: '#00ff9d', backgroundColor: 'rgba(0, 255, 157, 0.1)', 
+                data: [], fill: true, tension: 0.4, pointRadius: 2 
+            }]
+        },
+        options: { 
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels:{color:'#fff'} } }, 
+            scales: { 
+                y: { grid:{color:'#333'}, title: {display: true, text: 'Metabolic Activity %', color: '#888'}, ticks:{color:'#888'}, min: 0, max: 100 }, 
+                x: { grid:{color:'#333'}, title: {display: true, text: 'Temperature (°C)', color: '#888'}, ticks:{color:'#888'} } 
+            } 
+        }
+    });
+}
+
+// --- UI HANDLERS ---
+
+function openSim() {
+    document.getElementById('modal-screen').classList.add('active');
+    if(!sceneManager) {
+        setTimeout(() => {
+            sceneManager = new DigesterSimulator('container-sim');
+            initChart();
+            runPhysics();
+            
+            // Bind all sliders
+            const ids = ['inp-feed', 'inp-retention', 'inp-temp', 'inp-ts', 'inp-vs'];
+            ids.forEach(id => {
+                document.getElementById(id).addEventListener('input', (e) => {
+                    const labelId = id.replace('inp', 'val');
+                    document.getElementById(labelId).innerText = e.target.value;
+                    runPhysics();
+                });
+            });
+        }, 100);
+    }
+}
+
+function closeSim() { document.getElementById('modal-screen').classList.remove('active'); }
+
+function resetSim() {
+    // Defaults
+    document.getElementById('inp-feed').value = DEFAULTS.feed;
+    document.getElementById('inp-retention').value = DEFAULTS.retention;
+    document.getElementById('inp-temp').value = DEFAULTS.temp;
+    document.getElementById('inp-ts').value = DEFAULTS.ts;
+    document.getElementById('inp-vs').value = DEFAULTS.vs;
+
+    // Update Labels
+    document.getElementById('val-feed').innerText = DEFAULTS.feed;
+    document.getElementById('val-retention').innerText = DEFAULTS.retention;
+    document.getElementById('val-temp').innerText = DEFAULTS.temp;
+    document.getElementById('val-ts').innerText = DEFAULTS.ts;
+    document.getElementById('val-vs').innerText = DEFAULTS.vs;
+    
+    runPhysics();
+}
+
+function toggleXRay() { if(sceneManager) sceneManager.toggleXRay(); }
+</script>
+</body>
+</html>

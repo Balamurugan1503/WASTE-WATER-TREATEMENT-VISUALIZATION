@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secondary Treatment Digital Twin - Fixed</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@300;400;600&display=swap');
+
+        body { 
+            margin: 0; overflow: hidden; background: #0b0e14; 
+            font-family: 'Inter', sans-serif;
+        }
+
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
+        
+        /* --- UI LABELS --- */
+        #labels-container { position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; overflow: hidden; }
+
+        .unit-label {
+            position: absolute;
+            background: rgba(10, 15, 20, 0.85);
+            backdrop-filter: blur(8px);
+            border-left: 3px solid #00d2ff;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            color: #e0f2fe;
+            padding: 8px 16px;
+            border-radius: 0 4px 4px 0;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            pointer-events: auto;
+            cursor: pointer;
+            transform: translate(-50%, -100%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.15);
+        }
+        .unit-label:hover { background: rgba(0, 210, 255, 0.2); box-shadow: 0 0 25px rgba(0, 210, 255, 0.4); }
+        .unit-label.visible { opacity: 1; }
+        
+        .lbl-num { font-size: 18px; color: #00d2ff; margin-right: 8px; font-weight: 700; }
+        .lbl-sub { display: block; font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* --- MAIN UI --- */
+        #main-ui {
+            position: absolute; bottom: 30px; left: 30px;
+            color: rgba(255,255,255,0.9); 
+            background: linear-gradient(90deg, rgba(15, 23, 42, 0.9) 0%, rgba(15, 23, 42, 0) 100%);
+            padding: 16px 24px; border-left: 4px solid #facc15;
+            font-family: 'Rajdhani', sans-serif;
+            pointer-events: none;
+        }
+        #main-ui h1 { margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; }
+        #main-ui p { margin: 4px 0 0 0; font-size: 14px; color: #cbd5e1; font-family: 'Inter', sans-serif; }
+
+        /* --- POPUP MODAL --- */
+        #process-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); 
+            backdrop-filter: blur(8px);
+            display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease; z-index: 1000;
+        }
+        #process-modal.active { opacity: 1; pointer-events: all; }
+
+        .modal-frame {
+            width: 90%; height: 85%; position: relative;
+            background: #0f172a; 
+            border: 1px solid #334155;
+            border-radius: 6px;
+            box-shadow: 0 0 60px rgba(0,0,0,0.8);
+            overflow: hidden;
+            display: flex;
+        }
+
+        #popup-view {
+            flex-grow: 1; position: relative;
+            background: radial-gradient(circle at center, #1e293b 0%, #020617 100%);
+            width: 100%; height: 100%;
+        }
+        #popup-canvas { width: 100%; height: 100%; display: block; }
+
+        #popup-sidebar {
+            width: 320px; background: rgba(11, 15, 25, 0.98);
+            border-left: 1px solid #334155;
+            display: flex; flex-direction: column;
+            padding: 24px;
+            color: #f1f5f9;
+            z-index: 20;
+        }
+
+        #popup-sidebar h2 { margin: 0 0 5px 0; font-size: 22px; color: #00d2ff; font-family: 'Rajdhani', sans-serif; text-transform: uppercase; }
+        p.desc { font-size: 13px; color: #94a3b8; line-height: 1.6; margin-bottom: 30px; border-bottom: 1px solid #334155; padding-bottom: 15px; }
+
+        .control-group { margin-bottom: 25px; }
+        .label-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 8px; font-weight: 700; color: #cbd5e1; text-transform: uppercase; }
+        .val { color: #facc15; font-family: 'Courier New', monospace; background: rgba(250, 204, 21, 0.1); padding: 2px 6px; border-radius: 2px; border: 1px solid rgba(250, 204, 21, 0.3); }
+
+        input[type=range] { width: 100%; cursor: pointer; height: 4px; background: #334155; border-radius: 2px; appearance: none; outline: none; }
+        input[type=range]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; background: #38bdf8; border-radius: 2px; transform: rotate(45deg); border: 2px solid #fff; }
+
+        .close-btn {
+            position: absolute; top: 15px; right: 15px;
+            background: transparent; border: 1px solid rgba(255,255,255,0.2); 
+            color: #fff; width: 40px; height: 40px; 
+            font-size: 20px; cursor: pointer; z-index: 30;
+            transition: all 0.2s;
+        }
+        .close-btn:hover { background: #ef4444; border-color: #ef4444; }
+
+        #hidden-controls-store { display: none; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <canvas id="main-canvas"></canvas>
+    <div id="labels-container"></div>
+    
+    <div id="main-ui">
+        <h1>Secondary Treatment</h1>
+        <p>Digital Twin Status: <strong>ONLINE</strong> <span style="color:#00d2ff">●</span></p>
+    </div>
+
+    <div id="process-modal">
+        <div class="modal-frame">
+            <button class="close-btn" onclick="closePopup()">✕</button>
+            <div id="popup-view">
+                <canvas id="popup-canvas"></canvas>
+            </div>
+            <div id="popup-sidebar">
+                <h2 id="modal-title">Process Title</h2>
+                <p id="modal-desc" class="desc">Process description.</p>
+                <div id="modal-inputs"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="hidden-controls-store">
+        <div id="controls-stage1">
+            <div class="control-group">
+                <div class="label-row"><span>MLSS Density</span><span id="val-mlss" class="val">3500</span></div>
+                <input type="range" min="2000" max="5000" value="3500" step="50" oninput="updateParam('mlss', this.value)">
+            </div>
+            <div class="control-group">
+                <div class="label-row"><span>Air Injection</span><span id="val-aeration" class="val">12.0</span></div>
+                <input type="range" min="5" max="25" value="12" step="0.5" oninput="updateParam('aeration', this.value)">
+            </div>
+        </div>
+        <div id="controls-stage2">
+            <div class="control-group">
+                <div class="label-row"><span>Media Depth</span><span id="val-depth" class="val">2.0</span></div>
+                <input type="range" min="1" max="3" value="2.0" step="0.1" oninput="updateParam('depth', this.value)">
+            </div>
+            <div class="control-group">
+                <div class="label-row"><span>Ventilation</span><span id="val-airflow" class="val">1.5</span></div>
+                <input type="range" min="0.5" max="3" value="1.5" step="0.1" oninput="updateParam('airflow', this.value)">
+            </div>
+        </div>
+    </div>
+
+    <script type="x-shader/x-vertex" id="waterVertex">
+        varying vec2 vUv; varying vec3 vPos; uniform float uTime;
+        void main() {
+            vUv = uv; vec3 pos = position;
+            float wave = sin(pos.x * 0.5 + uTime) * 0.1 + sin(pos.z * 0.5 + uTime * 0.8) * 0.1;
+            pos.y += wave; vPos = pos;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        }
+    </script>
+    <script type="x-shader/x-fragment" id="waterFragment">
+        varying vec2 vUv; uniform float uTime; uniform vec3 uColor;
+        void main() {
+            float noise = sin(vUv.x * 20.0 + uTime) * cos(vUv.y * 20.0 + uTime * 0.8);
+            vec3 c = mix(vec3(0.02, 0.1, 0.15), uColor, 0.6 + noise * 0.1);
+            gl_FragColor = vec4(c, 0.85);
+        }
+    </script>
+
+    <script>
+        // --- TEXTURES & MATERIALS ---
+        function createFlowTexture() {
+            const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(0,0,512,128);
+            ctx.fillStyle = '#00d2ff';
+            for(let i=0; i<4; i++) {
+                const x = 50 + i * 140;
+                ctx.beginPath(); ctx.moveTo(x, 40); ctx.lineTo(x+40, 64); ctx.lineTo(x, 88); ctx.lineTo(x+10, 64); ctx.fill();
+            }
+            const t = new THREE.CanvasTexture(c);
+            t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping;
+            return t;
+        }
+        function createConcreteTexture() {
+             const c = document.createElement('canvas'); c.width=256; c.height=256;
+             const ctx = c.getContext('2d');
+             ctx.fillStyle='#555'; ctx.fillRect(0,0,256,256);
+             for(let i=0;i<5000;i++){ ctx.fillStyle=Math.random()>.5?'#666':'#444'; ctx.fillRect(Math.random()*256,Math.random()*256,2,2); }
+             return new THREE.CanvasTexture(c);
+        }
+
+        const flowTex = createFlowTexture();
+        const mats = {
+            concrete: new THREE.MeshStandardMaterial({ map: createConcreteTexture(), roughness: 0.9 }),
+            steel: new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.4, metalness: 0.6 }),
+            safetyYellow: new THREE.MeshStandardMaterial({ color: 0xfacc15 }),
+            water: new THREE.ShaderMaterial({
+                uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(0x0ea5e9) } },
+                vertexShader: document.getElementById('waterVertex').textContent,
+                fragmentShader: document.getElementById('waterFragment').textContent,
+                transparent: true, side: THREE.DoubleSide
+            }),
+            pipeFlow: new THREE.MeshStandardMaterial({ map: flowTex, color: 0xffffff, emissive: 0x00d2ff, emissiveIntensity: 0.3 })
+        };
+
+        // --- MAIN SCENE ---
+        const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0e14);
+        scene.fog = new THREE.FogExp2(0x0b0e14, 0.015);
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth/window.innerHeight, 1, 300);
+        camera.position.set(45, 30, 60);
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('main-canvas'), antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.maxPolarAngle = Math.PI/2 - 0.05;
+
+        // LIGHTS
+        scene.add(new THREE.HemisphereLight(0x38bdf8, 0x000000, 0.4));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(-20, 50, 20); dirLight.castShadow = true; scene.add(dirLight);
+
+        // ENVIRONMENT
+        scene.add(new THREE.GridHelper(200, 50, 0x1e293b, 0x1e293b));
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: 0x05070a, roughness: 0.2 }));
+        floor.rotation.x = -Math.PI/2; floor.position.y = -0.05; floor.receiveShadow = true; scene.add(floor);
+
+        // TANKS
+        const tankMeshes = [];
+        function createTank(x, label, id, type) {
+            const g = new THREE.Group(); g.position.set(x, 0, 0);
+            
+            // Wall
+            const wall = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 8, 64, 1, true), mats.concrete);
+            wall.position.y = 4; wall.castShadow = true; g.add(wall);
+            
+            // Water
+            const w = new THREE.Mesh(new THREE.CylinderGeometry(7.8, 7.8, 1, 64), mats.water);
+            w.position.y = 6.5; g.add(w);
+
+            // Railing
+            const rail = new THREE.Mesh(new THREE.TorusGeometry(9.2, 0.1, 8, 64), mats.safetyYellow);
+            rail.rotation.x = Math.PI/2; rail.position.y = 9; g.add(rail);
+
+            // Hit Volume
+            const hit = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 8, 16), new THREE.MeshBasicMaterial({visible:false}));
+            hit.position.y = 4; hit.userData = { id: id };
+            g.add(hit); tankMeshes.push(hit);
+            
+            scene.add(g);
+            
+            // Label
+            const div = document.createElement('div');
+            div.className = 'unit-label';
+            div.innerHTML = `<span class="lbl-num">0${id}</span>${label}<span class="lbl-sub">${type}</span>`;
+            div.onclick = () => openPopup(id);
+            document.getElementById('labels-container').appendChild(div);
+            return { pos: new THREE.Vector3(x, 9, 0), el: div };
+        }
+
+        const labels = [
+            createTank(-12, "AERATION", 1, "Activated Sludge"),
+            createTank(12, "BIOFILTER", 2, "Nitrification")
+        ];
+
+        // Pipe
+        const p = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 16, 16), mats.pipeFlow);
+        p.rotation.z = Math.PI/2; p.position.y = 2; scene.add(p);
+
+        // --- POPUP SYSTEM (The Fix) ---
+        const popupScene = new THREE.Scene();
+        const popupContentGroup = new THREE.Group();
+        popupScene.add(popupContentGroup);
+        
+        // Popup Lights (Persist in Scene)
+        const pAmb = new THREE.AmbientLight(0xffffff, 0.8);
+        const pDir = new THREE.DirectionalLight(0xffffff, 1.2);
+        pDir.position.set(5, 10, 20);
+        popupScene.add(pAmb, pDir);
+
+        const popupCanvas = document.getElementById('popup-canvas');
+        const popupRenderer = new THREE.WebGLRenderer({ canvas: popupCanvas, alpha: true, antialias: true });
+        const popupCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+        popupCamera.position.set(0, 5, 25); 
+        
+        const popupControls = new THREE.OrbitControls(popupCamera, popupCanvas);
+        popupControls.enableDamping = true;
+
+        let activePopupId = null;
+        let popupObjects = {};
+
+        function initPopupContents(id) {
+            // Clean old objects
+            while(popupContentGroup.children.length > 0) { 
+                popupContentGroup.remove(popupContentGroup.children[0]); 
+            }
+            popupObjects = {};
+
+            // 1. Cutaway Wall (Rotated to face camera)
+            // thetaLength = 4.71 (270 deg), leaving 90 deg open.
+            // Rotated -PI/2 to face Z axis
+            const wallGeo = new THREE.CylinderGeometry(7, 7, 10, 64, 1, true, 0, 4.71); 
+            const wall = new THREE.Mesh(wallGeo, mats.concrete);
+            wall.material.side = THREE.DoubleSide;
+            wall.rotation.y = -Math.PI / 4; // Face the gap towards camera
+            popupContentGroup.add(wall);
+
+            if(id === 1) { // Aeration
+                // Liquid
+                const lGeo = new THREE.CylinderGeometry(6.8, 6.8, 8, 64, 1, false, 0, 4.71);
+                const lMat = new THREE.MeshPhysicalMaterial({ color: 0x5b4836, transmission: 0.5, roughness: 0.1 });
+                const liq = new THREE.Mesh(lGeo, lMat);
+                liq.rotation.y = -Math.PI / 4; liq.position.y = -1;
+                popupContentGroup.add(liq); popupObjects.liquid = liq;
+
+                // Bubbles
+                const bGeo = new THREE.BufferGeometry();
+                const bPos = [];
+                for(let i=0; i<1500; i++) bPos.push((Math.random()-0.5)*10, Math.random()*8-4, (Math.random()-0.5)*10);
+                bGeo.setAttribute('position', new THREE.Float32BufferAttribute(bPos, 3));
+                const bub = new THREE.Points(bGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, transparent:true, opacity:0.6 }));
+                popupContentGroup.add(bub); popupObjects.bubbles = bub;
+
+            } else { // Biofilter
+                // Media
+                const mGeo = new THREE.CylinderGeometry(6.8, 6.8, 4, 64, 1, false, 0, 4.71);
+                const media = new THREE.Mesh(mGeo, new THREE.MeshStandardMaterial({ color: 0x333, roughness:1 }));
+                media.rotation.y = -Math.PI / 4; media.position.y = -3;
+                popupContentGroup.add(media); popupObjects.media = media;
+
+                // Arm
+                const arm = new THREE.Mesh(new THREE.BoxGeometry(13, 0.4, 0.4), mats.steel);
+                arm.position.y = 4;
+                popupContentGroup.add(arm); popupObjects.arm = arm;
+
+                // Drops
+                const dGeo = new THREE.BufferGeometry();
+                const dPos = [];
+                for(let i=0; i<1000; i++) dPos.push((Math.random()-0.5)*12, Math.random()*8-4, (Math.random()-0.5)*12);
+                dGeo.setAttribute('position', new THREE.Float32BufferAttribute(dPos, 3));
+                const drops = new THREE.Points(dGeo, new THREE.PointsMaterial({ color: 0x88ccff, size: 0.1 }));
+                popupContentGroup.add(drops); popupObjects.drops = drops;
+            }
+        }
+
+        // --- INTERACTION ---
+        const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
+        
+        window.addEventListener('click', e => {
+            if(e.target.closest('.unit-label') || e.target.closest('#process-modal')) return;
+            mouse.x = (e.clientX/window.innerWidth)*2-1; mouse.y = -(e.clientY/window.innerHeight)*2+1;
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(tankMeshes);
+            if(hits.length > 0) openPopup(hits[0].object.userData.id);
+        });
+
+        window.openPopup = function(id) {
+            activePopupId = id;
+            document.getElementById('process-modal').classList.add('active');
+            
+            const titles = {1:"Aeration Stage", 2:"Bio-Filtration"};
+            document.getElementById('modal-title').innerText = titles[id];
+            
+            const inputs = document.getElementById('modal-inputs'); inputs.innerHTML = '';
+            inputs.appendChild(document.getElementById(`controls-stage${id}`));
+
+            initPopupContents(id);
+        };
+
+        window.closePopup = function() {
+            document.getElementById('process-modal').classList.remove('active');
+            const inputs = document.getElementById('modal-inputs');
+            if(inputs.children.length > 0) document.getElementById('hidden-controls-store').appendChild(inputs.children[0]);
+            activePopupId = null;
+        };
+
+        window.updateParam = function(key, val) {
+            document.getElementById(`val-${key}`).innerText = val;
+            if(!activePopupId) return;
+            if(key==='mlss' && popupObjects.liquid) popupObjects.liquid.material.color.setHSL(0.08, 0.4, 0.5 - (val-2000)/6000);
+            if(key==='aeration' && popupObjects.bubbles) popupObjects.bubbles.material.size = val/50;
+        };
+
+        // --- ANIMATION ---
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+
+            controls.update();
+            mats.water.uniforms.uTime.value = t;
+            mats.pipeFlow.map.offset.x -= 0.01;
+
+            // Labels
+            labels.forEach(l => {
+                const v = l.pos.clone().project(camera);
+                if(v.z > 1 || Math.abs(v.x)>1.1 || Math.abs(v.y)>1.1) l.el.classList.remove('visible');
+                else {
+                    l.el.style.left = ((v.x+1)/2*window.innerWidth) + 'px';
+                    l.el.style.top = ((-v.y+1)/2*window.innerHeight) + 'px';
+                    l.el.classList.add('visible');
+                }
+            });
+
+            renderer.render(scene, camera);
+
+            // POPUP RENDER LOOP (Fixed Resizing)
+            if(activePopupId) {
+                // AUTO RESIZE CHECK (Fixes Black Screen)
+                const pCont = document.getElementById('popup-view');
+                const w = pCont.clientWidth;
+                const h = pCont.clientHeight;
+                if(popupCanvas.width !== w || popupCanvas.height !== h) {
+                    popupRenderer.setSize(w, h, false);
+                    popupCamera.aspect = w / h;
+                    popupCamera.updateProjectionMatrix();
+                }
+
+                popupControls.update();
+                
+                // Anim
+                if(popupObjects.bubbles) {
+                    const pos = popupObjects.bubbles.geometry.attributes.position.array;
+                    for(let i=1; i<pos.length; i+=3) {
+                        pos[i] += 0.05; if(pos[i]>4) pos[i]=-4;
+                    }
+                    popupObjects.bubbles.geometry.attributes.position.needsUpdate = true;
+                }
+                if(popupObjects.arm) popupObjects.arm.rotation.y -= 0.02;
+
+                popupRenderer.render(popupScene, popupCamera);
+            }
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth/window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

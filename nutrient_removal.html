@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nutrient Removal Digital Twin (Final)</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@300;400;600&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0b0e14;
+            --bg-panel: #151921;
+            --accent-blue: #00d2ff;
+            --accent-green: #00ff9d;
+            --accent-purple: #bb86fc;
+            --accent-danger: #ff4444;
+            --text-main: #e0f2fe;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --font-display: 'Rajdhani', sans-serif;
+            --font-mono: 'Roboto Mono', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-dark); color: var(--text-main); font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+
+        .btn {
+            background: rgba(0, 210, 255, 0.1); border: 1px solid var(--accent-blue); color: var(--accent-blue);
+            padding: 12px 24px; border-radius: 4px; cursor: pointer; font-family: var(--font-display);
+            font-weight: 700; text-transform: uppercase; letter-spacing: 1px; transition: all 0.2s;
+        }
+        .btn:hover { background: var(--accent-blue); color: #000; box-shadow: 0 0 15px var(--accent-blue); }
+
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); z-index: 1000; display: none; opacity: 0; transition: opacity 0.3s ease; }
+        .modal.active { display: flex; opacity: 1; }
+
+        .sim-layout { width: 100%; height: 100%; display: grid; grid-template-columns: 360px 1fr 360px; }
+        .sim-sidebar { background: var(--bg-panel); border-right: 1px solid var(--border); padding: 25px; display: flex; flex-direction: column; overflow-y: auto; z-index: 10; }
+        .sim-sidebar.right { border-left: 1px solid var(--border); border-right: none; }
+        
+        h2 { font-family: var(--font-display); font-size: 1.8rem; color: #fff; margin-bottom: 5px; }
+        h3 { font-family: var(--font-display); font-size: 1.2rem; color: #fff; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 25px; }
+
+        .control-group { margin-bottom: 15px; }
+        .control-label { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 5px; color: var(--text-muted); }
+        .control-val { font-family: var(--font-mono); color: var(--accent-blue); }
+
+        /* Updated Input Styling for Compatibility */
+        input[type=range] { 
+            width: 100%; 
+            -webkit-appearance: none; /* WebKit */
+            appearance: none;         /* Standard */
+            background: transparent; 
+        }
+        
+        input[type=range]::-webkit-slider-thumb { 
+            -webkit-appearance: none; 
+            appearance: none;
+            height: 16px; 
+            width: 16px; 
+            border-radius: 50%; 
+            background: var(--accent-blue); 
+            cursor: pointer; 
+            margin-top: -6px; 
+            box-shadow: 0 0 10px var(--accent-blue); 
+        }
+        
+        input[type=range]::-webkit-slider-runnable-track { 
+            width: 100%; 
+            height: 4px; 
+            cursor: pointer; 
+            background: #334155; 
+            border-radius: 2px; 
+        }
+
+        /* Firefox Support */
+        input[type=range]::-moz-range-thumb {
+            height: 16px; 
+            width: 16px; 
+            border: none;
+            border-radius: 50%; 
+            background: var(--accent-blue); 
+            cursor: pointer; 
+            box-shadow: 0 0 10px var(--accent-blue); 
+        }
+        
+        input[type=range]::-moz-range-track {
+            width: 100%; 
+            height: 4px; 
+            cursor: pointer; 
+            background: #334155; 
+            border-radius: 2px; 
+        }
+
+        .output-box { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 15px; margin-top: auto; }
+        .output-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; }
+        .output-val { font-family: var(--font-mono); color: #fff; }
+
+        .sim-canvas-container { position: relative; width: 100%; height: 100%; background: radial-gradient(circle at center, #111827 0%, #000 100%); }
+        .close-sim { position: absolute; top: 20px; right: 20px; z-index: 20; background: rgba(0,0,0,0.5); border: 1px solid #fff; color: #fff; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: 0.2s; }
+        .close-sim:hover { background: var(--accent-danger); border-color: var(--accent-danger); }
+        .flex-gap { display: flex; gap: 10px; }
+        .w-full { width: 100%; }
+        
+        .zone-label { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; font-family: var(--font-mono); margin-right: 5px; }
+        .bg-anoxic { background: rgba(0, 255, 100, 0.2); color: #00ff64; border: 1px solid #00ff64; }
+        .bg-aerobic { background: rgba(0, 210, 255, 0.2); color: #00d2ff; border: 1px solid #00d2ff; }
+        .bg-chem { background: rgba(187, 134, 252, 0.2); color: #bb86fc; border: 1px solid #bb86fc; }
+    </style>
+</head>
+<body>
+
+    <div style="text-align: center;">
+        <h1 style="font-family: var(--font-display); font-size: 3rem; margin-bottom: 10px;">Tertiary Treatment</h1>
+        <p style="color: var(--text-muted); margin-bottom: 30px;">Unit Operation: Biological Nutrient Removal (BNR)</p>
+        <button class="btn" onclick="openSim()">Launch Simulator</button>
+    </div>
+
+    <div id="modal-bnr" class="modal">
+        <button class="close-sim" onclick="closeSim()">✕</button>
+        
+        <div class="sim-layout">
+            <div class="sim-sidebar">
+                <h2>Nutrient Removal</h2>
+                <p class="subtitle">Simulating Nitrification, Denitrification & P-Removal</p>
+                
+                <h3>Process Parameters</h3>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Dissolved Oxygen (mg/L)</span> <span id="val-do" class="control-val">3.5</span></div>
+                    <input type="range" id="inp-do" min="1" max="6" value="3.5" step="0.1">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Sludge Age SRT (days)</span> <span id="val-srt" class="control-val">13</span></div>
+                    <input type="range" id="inp-srt" min="6" max="20" value="13" step="1">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>pH Level</span> <span id="val-ph" class="control-val">7.5</span></div>
+                    <input type="range" id="inp-ph" min="6.5" max="8.5" value="7.5" step="0.1">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Carbon Dose (mg/L)</span> <span id="val-carbon" class="control-val">45</span></div>
+                    <input type="range" id="inp-carbon" min="10" max="80" value="45" step="5">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Anoxic Contact Time (min)</span> <span id="val-anoxic" class="control-val">55</span></div>
+                    <input type="range" id="inp-anoxic" min="20" max="90" value="55" step="5">
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-label"><span>Coagulant Dose (mg/L)</span> <span id="val-coag" class="control-val">22.5</span></div>
+                    <input type="range" id="inp-coag" min="5" max="40" value="22.5" step="2.5">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Mixing Speed (rpm)</span> <span id="val-mixSpeed" class="control-val">75</span></div>
+                    <input type="range" id="inp-mixSpeed" min="30" max="120" value="75" step="5">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label"><span>Mixing Intensity (s⁻¹)</span> <span id="val-mix" class="control-val">60</span></div>
+                    <input type="range" id="inp-mix" min="20" max="100" value="60" step="5">
+                </div>
+
+                <div class="flex-gap">
+                    <button class="btn w-full" onclick="updatePhysics()">Update Process</button>
+                    <button class="btn w-full" style="border-color:#555; color:#aaa" onclick="resetSim()">Reset</button>
+                </div>
+
+                <div class="output-box">
+                    <div class="output-row"><span>NH₄ Rate:</span> <span id="out-nit-rate" class="output-val">--</span></div>
+                    <div class="output-row"><span>NO₃ Removal:</span> <span id="out-denit-rate" class="output-val">--</span></div>
+                    <div class="output-row"><span>Total P Removed:</span> <span id="out-p-rem" class="output-val" style="color:var(--accent-purple)">--</span></div>
+                    <div class="output-row"><span>Nutrient Eff:</span> <span id="out-eff" class="output-val" style="color:var(--accent-green)">--%</span></div>
+                    
+                    <div class="output-row" style="margin-top:10px; border-top:1px dashed #444; padding-top:10px;">
+                        <span id="out-status" style="font-size:0.8em; line-height:1.4">Initializing BNR System...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sim-canvas-container" id="container-bnr"></div>
+            
+            <div class="sim-sidebar right">
+                <h3>Reaction Kinetics</h3>
+                
+                <p style="font-size:0.8rem; color:#aaa; margin-bottom:5px;">Nitrogen Transformation</p>
+                <div style="height: 180px; margin-bottom: 20px;">
+                    <canvas id="chart-nitrogen"></canvas>
+                </div>
+
+                <p style="font-size:0.8rem; color:#aaa; margin-bottom:5px;">Phosphorus Removal</p>
+                <div style="height: 180px; margin-bottom: 20px;">
+                    <canvas id="chart-phos"></canvas>
+                </div>
+                
+                <div style="margin-top:20px; font-size:0.85rem; color:var(--text-muted); line-height: 1.6;">
+                    <strong>Zone Guide:</strong><br>
+                    <span class="zone-label bg-anoxic">ANOXIC</span> NO₃ → N₂ Gas (Swirling)<br>
+                    <span class="zone-label bg-aerobic">AEROBIC</span> NH₄ → NO₃ (Bubbling)<br>
+                    <span class="zone-label bg-chem">CHEM-P</span> PO₄ → Flocs (Settling)<br><br>
+                    <strong>Particles:</strong><br>
+                    <span style="color:#ffff00">● Ammonia</span> &nbsp; <span style="color:#0088ff">● Nitrate</span><br>
+                    <span style="color:#ff00ff">● Phosphate</span> &nbsp; <span style="color:#ffffff">● Flocs</span>
+                </div>
+                
+                <div style="margin-top:20px;">
+                    <button class="btn w-full" style="font-size:0.8rem" onclick="toggleXRay()">Toggle X-Ray Mode</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// --- DEFAULTS ---
+const DEFAULTS = { 
+    do: 3.5, srt: 13, ph: 7.5, carbon: 45, anoxic: 55, coag: 22.5, mix: 60, mixSpeed: 75 
+};
+let sceneManager = null;
+let chartNitro = null;
+let chartPhos = null;
+
+class BNRSimulator {
+    constructor(containerId) {
+        this.container = document.getElementById(containerId);
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        
+        this.scene = new THREE.Scene();
+        this.scene.fog = new THREE.FogExp2(0x111827, 0.04);
+
+        this.camera = new THREE.PerspectiveCamera(50, this.width / this.height, 0.1, 100);
+        this.camera.position.set(0, 12, 18); 
+        this.camera.lookAt(0, 0, 0);
+        
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(this.width, this.height);
+        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.container.appendChild(this.renderer.domElement);
+        
+        // Lighting
+        const ambient = new THREE.AmbientLight(0x404040, 0.6);
+        this.scene.add(ambient);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 5);
+        this.scene.add(dirLight);
+
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+
+        this.objects = {};
+        this.simState = { xray: false, rotationSpeed: 0.05 }; 
+        this.particlesData = [];
+        this.simParams = { ...DEFAULTS };
+
+        this.initGeometry();
+        this.initParticles();
+        
+        window.addEventListener('resize', () => this.resize());
+        this.animate = this.animate.bind(this);
+        requestAnimationFrame(this.animate);
+    }
+
+    initGeometry() {
+        this.nutrientGroup = new THREE.Group();
+        this.scene.add(this.nutrientGroup);
+
+        const tankGeo = new THREE.BoxGeometry(4.8, 3, 4);
+        tankGeo.scale(-1, 1, 1);
+        const concreteMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.9, side: THREE.BackSide });
+
+        // 1. ANOXIC BASIN
+        const anoxicTank = new THREE.Mesh(tankGeo, concreteMat);
+        anoxicTank.position.set(-5, 0, 0);
+        this.nutrientGroup.add(anoxicTank);
+        this.objects.anoxicTank = anoxicTank;
+
+        const mixerGeo = new THREE.CylinderGeometry(0.1, 0.1, 2.5);
+        const bladeGeo = new THREE.BoxGeometry(1.5, 0.1, 0.4);
+        const mixerMat = new THREE.MeshStandardMaterial({ color: 0x888888 });
+        
+        const mixerShaft = new THREE.Mesh(mixerGeo, mixerMat);
+        const mixerBlade = new THREE.Mesh(bladeGeo, mixerMat);
+        mixerBlade.position.y = -1.2;
+        
+        this.objects.mixer1 = new THREE.Group();
+        this.objects.mixer1.add(mixerShaft);
+        this.objects.mixer1.add(mixerBlade);
+        this.objects.mixer1.position.set(-5, 1.5, 0);
+        this.nutrientGroup.add(this.objects.mixer1);
+
+        const waterGeo = new THREE.BoxGeometry(4.6, 2.5, 3.8);
+        const anoxicWaterMat = new THREE.MeshPhysicalMaterial({ color: 0x004422, transmission: 0.6, opacity: 0.8, transparent: true, roughness: 0.2 });
+        this.objects.waterAnoxic = new THREE.Mesh(waterGeo, anoxicWaterMat);
+        this.objects.waterAnoxic.position.set(-5, 0.25, 0);
+        this.nutrientGroup.add(this.objects.waterAnoxic);
+
+        // 2. AEROBIC BASIN
+        const aerobicTank = new THREE.Mesh(tankGeo, concreteMat);
+        aerobicTank.position.set(0, 0, 0);
+        this.nutrientGroup.add(aerobicTank);
+        this.objects.aerobicTank = aerobicTank;
+
+        const aerobicWaterMat = new THREE.MeshPhysicalMaterial({ color: 0x0088ff, transmission: 0.7, opacity: 0.6, transparent: true, roughness: 0.1 });
+        this.objects.waterAerobic = new THREE.Mesh(waterGeo, aerobicWaterMat);
+        this.objects.waterAerobic.position.set(0, 0.25, 0);
+        this.nutrientGroup.add(this.objects.waterAerobic);
+
+        // 3. CHEM BASIN
+        const chemTank = new THREE.Mesh(tankGeo, concreteMat);
+        chemTank.position.set(5, 0, 0);
+        this.nutrientGroup.add(chemTank);
+        this.objects.chemTank = chemTank;
+
+        this.objects.mixer2 = this.objects.mixer1.clone();
+        this.objects.mixer2.position.set(5, 1.5, 0);
+        this.nutrientGroup.add(this.objects.mixer2);
+
+        const chemWaterMat = new THREE.MeshPhysicalMaterial({ color: 0x555577, transmission: 0.6, opacity: 0.7, transparent: true, roughness: 0.3 });
+        this.objects.waterChem = new THREE.Mesh(waterGeo, chemWaterMat);
+        this.objects.waterChem.position.set(5, 0.25, 0);
+        this.nutrientGroup.add(this.objects.waterChem);
+
+        // Labels
+        this.createLabel("ANOXIC", -5, 2);
+        this.createLabel("AEROBIC", 0, 2);
+        this.createLabel("CHEM P-REM", 5, 2);
+    }
+
+    createLabel(text, x, y) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 256; canvas.height = 64;
+        ctx.fillStyle = "white";
+        ctx.font = "bold 40px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(text, 128, 45);
+        const tex = new THREE.CanvasTexture(canvas);
+        const mat = new THREE.SpriteMaterial({ map: tex });
+        const sprite = new THREE.Sprite(mat);
+        sprite.position.set(x, y + 1.5, 0);
+        sprite.scale.set(3, 0.75, 1);
+        this.nutrientGroup.add(sprite);
+    }
+
+    createGlowTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 32; canvas.height = 32;
+        const ctx = canvas.getContext('2d');
+        const grd = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+        grd.addColorStop(0, 'rgba(255,255,255,1)');
+        grd.addColorStop(0.4, 'rgba(255,255,255,0.5)');
+        grd.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, 32, 32);
+        return new THREE.CanvasTexture(canvas);
+    }
+
+    initParticles() {
+        const count = 1200;
+        const positions = new Float32Array(count * 3);
+        const colors = new Float32Array(count * 3);
+        
+        // 0=NH4(Yellow), 1=NO3(Blue), 2=PO4(Pink), 3=Floc(White), 4=Bubble(Grey)
+        this.particleTypes = new Uint8Array(count);
+
+        for(let i=0; i<count; i++) this.resetParticle(i, positions, colors);
+        
+        const pGeo = new THREE.BufferGeometry();
+        pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        pGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const pMat = new THREE.PointsMaterial({
+            size: 0.15, vertexColors: true, map: this.createGlowTexture(),
+            transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false
+        });
+
+        this.objects.particles = new THREE.Points(pGeo, pMat);
+        this.nutrientGroup.add(this.objects.particles);
+    }
+
+    resetParticle(i, posArr, colArr) {
+        posArr[i*3] = -7.5; 
+        posArr[i*3+1] = (Math.random() * 2) - 1; 
+        posArr[i*3+2] = (Math.random() * 3) - 1.5;
+        
+        const rand = Math.random();
+        if(rand < 0.4) {
+            this.particleTypes[i] = 0; // NH4
+            if(colArr) { colArr[i*3]=1; colArr[i*3+1]=1; colArr[i*3+2]=0; }
+        } else if (rand < 0.7) {
+            this.particleTypes[i] = 1; // NO3
+            if(colArr) { colArr[i*3]=0; colArr[i*3+1]=0.5; colArr[i*3+2]=1; }
+        } else {
+            this.particleTypes[i] = 2; // PO4
+            if(colArr) { colArr[i*3]=1; colArr[i*3+1]=0; colArr[i*3+2]=1; }
+        }
+    }
+
+    updateConfig(params) {
+        this.simParams = params;
+        this.simState.rotationSpeed = params.mixSpeed / 600;
+        
+        const brightness = 0.5 + (params.do / 12);
+        this.objects.waterAerobic.material.color.setHSL(0.6, 1.0, brightness * 0.5);
+    }
+
+    toggleXRay() {
+        this.simState.xray = !this.simState.xray;
+        const opacity = this.simState.xray ? 0.1 : 0.7;
+        this.objects.waterAnoxic.material.opacity = opacity;
+        this.objects.waterAerobic.material.opacity = opacity;
+        this.objects.waterChem.material.opacity = opacity;
+        this.objects.anoxicTank.material.wireframe = this.simState.xray;
+        this.objects.aerobicTank.material.wireframe = this.simState.xray;
+        this.objects.chemTank.material.wireframe = this.simState.xray;
+    }
+
+    resize() {
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
+        this.camera.aspect = this.width / this.height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(this.width, this.height);
+    }
+
+    animate() {
+        requestAnimationFrame(this.animate);
+        if(!this.objects.particles) return;
+
+        this.objects.mixer1.rotation.y += this.simState.rotationSpeed;
+        this.objects.mixer2.rotation.y += this.simState.rotationSpeed;
+
+        const positions = this.objects.particles.geometry.attributes.position.array;
+        const colors = this.objects.particles.geometry.attributes.color.array;
+        
+        const speed = 0.03; 
+
+        for(let i=0; i<this.particleTypes.length; i++) {
+            positions[i*3] += speed;
+            const px = positions[i*3];
+            const type = this.particleTypes[i];
+
+            // ZONE 1: ANOXIC (-7 to -2.5)
+            if(px < -2.5) {
+                positions[i*3+2] += Math.sin(positions[i*3]*2 + Date.now()*0.002) * 0.02 * (this.simParams.mix/50);
+                
+                // NO3 -> Bubble (Denitrification)
+                // Inhibited by High DO (1 - DO/6)
+                if(type === 1 && Math.random() < 0.02 * (this.simParams.carbon/40) * Math.max(0, 1 - this.simParams.do/6)) {
+                    this.particleTypes[i] = 4; // Bubble
+                    colors[i*3]=0.7; colors[i*3+1]=0.7; colors[i*3+2]=0.7;
+                }
+                
+                if(type === 4) {
+                    positions[i*3+1] += 0.05; // Rise
+                    if(positions[i*3+1] > 1.2) { 
+                        this.particleTypes[i] = 99; positions[i*3+1] = -50; 
+                    }
+                }
+            }
+            // ZONE 2: AEROBIC (-2.5 to 2.5)
+            else if(px >= -2.5 && px < 2.5) {
+                const turb = (this.simParams.do / 6) * 0.02;
+                positions[i*3+1] += (Math.random()-0.5) * turb;
+                
+                // NH4 -> NO3 (Nitrification)
+                if(type === 0 && Math.random() < 0.02 * (this.simParams.do/6)) {
+                    this.particleTypes[i] = 1; // Nitrate
+                    colors[i*3]=0; colors[i*3+1]=0.5; colors[i*3+2]=1;
+                }
+            }
+            // ZONE 3: CHEM (2.5 to 7.5)
+            else if(px >= 2.5 && px < 7.5) {
+                // PO4 -> Floc
+                if(type === 2 && Math.random() < 0.02 * (this.simParams.coag/20)) {
+                    this.particleTypes[i] = 3; // Floc
+                    colors[i*3]=1; colors[i*3+1]=1; colors[i*3+2]=1;
+                }
+                if(type === 3) {
+                    positions[i*3+1] -= 0.01; // Settle
+                }
+            }
+
+            if(positions[i*3] > 7.5 || this.particleTypes[i] === 99) {
+                this.resetParticle(i, positions, colors);
+            }
+        }
+
+        this.objects.particles.geometry.attributes.position.needsUpdate = true;
+        this.objects.particles.geometry.attributes.color.needsUpdate = true;
+        this.controls.update();
+        this.renderer.render(this.scene, this.camera);
+    }
+}
+
+// --- PHYSICS & UI ---
+function updatePhysics() {
+    const DO = parseFloat(document.getElementById('inp-do').value);
+    const SRT = parseFloat(document.getElementById('inp-srt').value);
+    const pH = parseFloat(document.getElementById('inp-ph').value);
+    const Carbon = parseFloat(document.getElementById('inp-carbon').value);
+    const AnoxicT = parseFloat(document.getElementById('inp-anoxic').value);
+    const Coag = parseFloat(document.getElementById('inp-coag').value);
+    const Mix = parseFloat(document.getElementById('inp-mix').value);
+    const MixSpeed = parseFloat(document.getElementById('inp-mixSpeed').value);
+
+    document.getElementById('val-do').innerText = DO;
+    document.getElementById('val-srt').innerText = SRT;
+    document.getElementById('val-ph').innerText = pH;
+    document.getElementById('val-carbon').innerText = Carbon;
+    document.getElementById('val-anoxic').innerText = AnoxicT;
+    document.getElementById('val-coag').innerText = Coag;
+    document.getElementById('val-mix').innerText = Mix;
+    document.getElementById('val-mixSpeed').innerText = MixSpeed;
+
+    const r_nit = 0.9 * (DO / (DO + 1.5)) * (SRT / 10) * (pH / 7.5);
+    const r_denit = 0.6 * (Carbon / 40) * (AnoxicT / 60) * Math.max(0, (1 - DO / 6)); 
+    const P_bio = 0.45 * (Mix / 60) * (Carbon / 40);
+    const P_chem = Coag * 0.025;
+    const TP_Removal = Math.min(10, P_bio + P_chem);
+    
+    let eff = ((r_nit + r_denit + TP_Removal) / (2.5 + 2.0 + 8.0)) * 100;
+    if(eff > 99) eff = 99;
+
+    document.getElementById('out-nit-rate').innerText = r_nit.toFixed(2) + " mg/L/h";
+    document.getElementById('out-denit-rate').innerText = r_denit.toFixed(2) + " mg/L/h";
+    document.getElementById('out-p-rem').innerText = TP_Removal.toFixed(2) + " mg/L";
+    document.getElementById('out-eff').innerText = eff.toFixed(1) + "%";
+
+    const statusEl = document.getElementById('out-status');
+    let statusText = "• Process Optimized.";
+    let statusColor = "#00ff9d";
+
+    if (DO < 1.5) {
+        statusText = "• Low DO: Nitrification inhibited."; statusColor = "#ffaa00";
+    } else if (Carbon < 20) {
+        statusText = "• Low Carbon: Denitrification poor."; statusColor = "#ff4444";
+    }
+    
+    statusEl.innerHTML = statusText;
+    statusEl.style.color = statusColor;
+
+    if(sceneManager) sceneManager.updateConfig({ do: DO, srt: SRT, ph: pH, carbon: Carbon, anoxic: AnoxicT, coag: Coag, mix: Mix, mixSpeed: MixSpeed });
+    updateCharts(r_nit, r_denit, TP_Removal);
+}
+
+function updateCharts(nit, denit, p_rem) {
+    if(!chartNitro || !chartPhos) return;
+    const nData1 = chartNitro.data.datasets[0].data;
+    const nData2 = chartNitro.data.datasets[1].data;
+    if(nData1.length > 20) { nData1.shift(); nData2.shift(); chartNitro.data.labels.shift(); }
+    
+    chartNitro.data.labels.push("");
+    nData1.push(nit + (Math.random()*0.05));
+    nData2.push(denit + (Math.random()*0.05));
+    chartNitro.update();
+
+    const pData = chartPhos.data.datasets[0].data;
+    if(pData.length > 20) { pData.shift(); chartPhos.data.labels.shift(); }
+    chartPhos.data.labels.push("");
+    pData.push(p_rem + (Math.random()*0.1));
+    chartPhos.update();
+}
+
+function initCharts() {
+    const ctxN = document.getElementById('chart-nitrogen').getContext('2d');
+    chartNitro = new Chart(ctxN, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                { label: 'Nitrification', borderColor: '#00d2ff', backgroundColor: 'rgba(0, 210, 255, 0.1)', data: [], tension: 0.4 },
+                { label: 'Denitrification', borderColor: '#00ff9d', backgroundColor: 'rgba(0, 255, 157, 0.1)', data: [], tension: 0.4 }
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { labels:{color:'#fff'} } }, scales: { y: { grid:{color:'#333'}, min: 0 }, x: { display: false } } }
+    });
+
+    const ctxP = document.getElementById('chart-phos').getContext('2d');
+    chartPhos = new Chart(ctxP, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{ label: 'Tot. P Removed (mg/L)', borderColor: '#bb86fc', backgroundColor: 'rgba(187, 134, 252, 0.1)', data: [], fill: true, tension: 0.4 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { labels:{color:'#fff'} } }, scales: { y: { grid:{color:'#333'}, min: 0, suggestedMax: 10 }, x: { display: false } } }
+    });
+}
+
+function openSim() {
+    document.getElementById('modal-bnr').classList.add('active');
+    if(!sceneManager) {
+        setTimeout(() => {
+            sceneManager = new BNRSimulator('container-bnr');
+            initCharts();
+            updatePhysics();
+            ['inp-do', 'inp-srt', 'inp-ph', 'inp-carbon', 'inp-anoxic', 'inp-coag', 'inp-mix', 'inp-mixSpeed'].forEach(id => {
+                document.getElementById(id).addEventListener('input', () => updatePhysics());
+            });
+            setInterval(() => updatePhysics(), 1000);
+        }, 100);
+    }
+}
+
+function closeSim() { document.getElementById('modal-bnr').classList.remove('active'); }
+function resetSim() {
+    document.getElementById('inp-do').value = DEFAULTS.do;
+    document.getElementById('inp-srt').value = DEFAULTS.srt;
+    document.getElementById('inp-ph').value = DEFAULTS.ph;
+    document.getElementById('inp-carbon').value = DEFAULTS.carbon;
+    document.getElementById('inp-anoxic').value = DEFAULTS.anoxic;
+    document.getElementById('inp-coag').value = DEFAULTS.coag;
+    document.getElementById('inp-mix').value = DEFAULTS.mix;
+    document.getElementById('inp-mixSpeed').value = DEFAULTS.mixSpeed;
+    updatePhysics();
+}
+function toggleXRay() { if(sceneManager) sceneManager.toggleXRay(); }
+</script>
+</body>
+</html>

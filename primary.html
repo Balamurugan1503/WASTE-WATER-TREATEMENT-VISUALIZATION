@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Industry Standard Wastewater Digital Twin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0d1117; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #container { position: relative; width: 100vw; height: 100vh; }
+        
+        /* --- Dynamic Control Panel (Integrated from PRI) --- */
+        #control-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 380px;
+            max-height: 90vh;
+            overflow-y: auto;
+            z-index: 10;
+            background-color: rgba(17, 24, 39, 0.95);
+            border: 1px solid #1e3a8a;
+            box-shadow: 0 0 20px rgba(30, 58, 138, 0.5);
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        /* Custom Scrollbar */
+        #control-panel::-webkit-scrollbar { width: 8px; }
+        #control-panel::-webkit-scrollbar-track { background: #1f2937; }
+        #control-panel::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 4px; }
+
+        .panel-header { border-bottom: 1px solid #374151; padding-bottom: 15px; margin-bottom: 20px; }
+        .control-group { margin-bottom: 20px; }
+        .control-label { color: #9ca3af; font-size: 0.9rem; display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .control-val { color: #60a5fa; font-weight: bold; font-family: monospace; }
+        
+        /* Range Slider Styling */
+        input[type=range] {
+            width: 100%; height: 6px; background: #374151; border-radius: 5px; appearance: none; outline: none;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            appearance: none; width: 18px; height: 18px; background: #3b82f6; border-radius: 50%; cursor: pointer; transition: transform .1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); background: #60a5fa; }
+
+        .chart-container {
+            margin-top: 25px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            padding: 10px;
+            border: 1px solid #374151;
+        }
+
+        .btn-action {
+            width: 100%; padding: 10px; border-radius: 6px; font-weight: 600; margin-top: 10px; cursor: pointer; transition: 0.2s;
+        }
+        .btn-blue { background: #2563eb; color: white; }
+        .btn-blue:hover { background: #1d4ed8; }
+        .btn-gray { background: #374151; color: #d1d5db; }
+        .btn-gray:hover { background: #4b5563; }
+
+        /* --- 3D Labels --- */
+        .modern-label {
+            color: #ffffff;
+            background: rgba(17, 24, 39, 0.85);
+            border-left: 4px solid #3b82f6;
+            padding: 6px 12px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 0 4px 4px 0;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease;
+        }
+        .modern-label.visible { opacity: 1; transform: translateY(0); }
+        
+        .flow-arrow { color: #fff; font-weight: bold; font-size: 24px; text-shadow: 0 0 10px #3b82f6; }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+
+    <div id="control-panel">
+        <div id="panel-content">
+            <div class="panel-header">
+                <h2 class="text-xl font-bold text-blue-400">PLANT SCADA OVERVIEW</h2>
+                <p class="text-sm text-gray-400 mt-2">Interactive Digital Twin V5.0</p>
+            </div>
+            
+            <div class="p-4 bg-gray-800/50 rounded border border-gray-700 mb-4">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-gray-400 text-sm">System Status</span>
+                    <span class="text-green-400 font-bold font-mono tracking-wider">● ONLINE</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400 text-sm">Total Inflow</span>
+                    <span class="text-blue-300 font-bold font-mono">1,240 m³/h</span>
+                </div>
+            </div>
+
+            <p class="text-xs text-center text-gray-500 italic mt-6">
+                Select a unit in the 3D view to access internal process controls and cross-section analysis.
+            </p>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+        import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { SAOPass } from 'three/addons/postprocessing/SAOPass.js';
+
+        // --- GLOBAL SIMULATION STATE ---
+        // This acts as the "PLC Memory" for the digital twin
+        const simState = {
+            activeStage: null,
+            screening: { angle: 10, flow: 50 }, // Angle influences visual rotation
+            grit: { velocity: 0.3, airFlow: 50 }, // Airflow influences bubble speed
+            clarifier: { rpm: 2.0, sludgeDepth: 1.0 }, // RPM influences visual rotation
+            flotation: { pressure: 5.0, bubbleSize: 75.0 } // Bubble size influences visual scale
+        };
+
+        let currentChart = null;
+
+        // --- SCENE SETUP ---
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 0.9;
+        renderer.localClippingEnabled = true; 
+        
+        container.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        container.appendChild(labelRenderer.domElement);
+
+        // --- Post-Processing ---
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        
+        const saoPass = new SAOPass(scene, camera, false, true);
+        saoPass.params.saoIntensity = 0.02;
+        saoPass.params.saoScale = 50;
+        composer.addPass(saoPass);
+
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.4, 0.85);
+        composer.addPass(bloomPass);
+
+        // --- Camera & Controls ---
+        const controls = new OrbitControls(camera, labelRenderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(50, 5, 0); 
+        camera.position.set(70, 35, 90);
+
+        // --- Clipping Plane (Cross-Section) ---
+        const localPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 2000); 
+        renderer.clippingPlanes = [localPlane];
+        
+        let activeUnit = null; 
+
+        // --- Lighting ---
+        new RGBELoader().setPath('https://threejs.org/examples/textures/equirectangular/')
+            .load('venice_sunset_1k.hdr', (texture) => {
+                texture.mapping = THREE.EquirectangularReflectionMapping;
+                scene.environment = texture;
+                scene.background = new THREE.Color(0x0a0a1a);
+            });
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 3);
+        dirLight.position.set(50, 50, 30);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 4096;
+        dirLight.shadow.mapSize.height = 4096;
+        scene.add(dirLight);
+
+        // --- Materials (PBR & Clipping Aware) ---
+        const clippingPlanes = [localPlane];
+        const mats = {
+            concrete: new THREE.MeshStandardMaterial({ color: 0x444455, roughness: 0.9, clippingPlanes }),
+            metal: new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.8, roughness: 0.3, side: THREE.DoubleSide, clippingPlanes }),
+            water: new THREE.MeshStandardMaterial({ color: 0x1e90ff, metalness: 0.1, roughness: 0.1, transparent: true, opacity: 0.7, clippingPlanes }),
+            mech: new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.9, roughness: 0.2, clippingPlanes }),
+            rail: new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.5, roughness: 0.5, clippingPlanes }),
+            sludge: new THREE.MeshStandardMaterial({ color: 0x332211, roughness: 1.0, clippingPlanes }),
+            glass: new THREE.MeshPhysicalMaterial({ color: 0xffffff, transmission: 0.9, opacity: 0.3, transparent: true, roughness: 0.1, clippingPlanes })
+        };
+
+        // --- Helper Functions ---
+        function createWalkway(width, length, height, x, z, parent) {
+            const platform = new THREE.Mesh(new THREE.BoxGeometry(width, 0.2, length), mats.metal);
+            platform.position.set(x, height, z);
+            platform.castShadow = true;
+            
+            // Simple Railing
+            const railH = 1;
+            const rail1 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, length, 8), mats.rail);
+            rail1.rotation.x = Math.PI/2; rail1.position.set(x+width/2, height+railH, z);
+            const rail2 = rail1.clone(); rail2.position.set(x-width/2, height+railH, z);
+            
+            parent.add(platform, rail1, rail2);
+        }
+
+        function createLabel(name, num, pos) {
+            const div = document.createElement('div');
+            div.className = 'modern-label';
+            div.textContent = `${num}. ${name.toUpperCase()}`;
+            const label = new CSS2DObject(div);
+            label.position.set(pos.x, pos.y + 8, pos.z);
+            scene.add(label);
+            setTimeout(() => div.classList.add('visible'), 500 + (num * 200));
+        }
+
+        // --- 1. Screening Chamber ---
+        function createScreening(x, y, z) {
+            const g = new THREE.Group();
+            g.name = "Screening Chamber";
+            g.position.set(x, y, z);
+
+            const tank = new THREE.Mesh(new THREE.BoxGeometry(10, 5, 8), mats.concrete);
+            tank.position.y = 2.5; tank.castShadow = true;
+            g.add(tank);
+            g.userData.mesh = tank; 
+            g.userData.width = 10;
+
+            const water = new THREE.Mesh(new THREE.PlaneGeometry(9.8, 7.8), mats.water);
+            water.rotation.x = -Math.PI/2; water.position.y = 4.5;
+            g.add(water);
+
+            // Dynamic Part: Bar Screens
+            const screenGroup = new THREE.Group();
+            screenGroup.name = "BarScreenGroup";
+            // Pivot point adjustment
+            screenGroup.position.set(0, 0.5, 0); 
+
+            for(let i = -2; i <= 2; i += 0.4) {
+                const bar = new THREE.Mesh(new THREE.BoxGeometry(0.15, 6, 0.3), mats.mech);
+                bar.position.set(4, 2.5, i); // Relative to group
+                screenGroup.add(bar);
+            }
+            g.add(screenGroup);
+            
+            // Set initial rotation based on config
+            screenGroup.rotation.z = THREE.MathUtils.degToRad(simState.screening.angle);
+
+            createWalkway(10.2, 2, 5.2, 0, -4.5, g);
+            return g;
+        }
+
+        // --- 2. Grit Removal ---
+        function createGrit(x, y, z) {
+            const g = new THREE.Group();
+            g.name = "Grit Removal";
+            g.position.set(x, y, z);
+
+            const tank = new THREE.Mesh(new THREE.BoxGeometry(15, 6, 6), mats.concrete);
+            tank.position.y = 3; tank.castShadow = true;
+            g.add(tank);
+            g.userData.mesh = tank;
+            g.userData.width = 15;
+
+            const water = new THREE.Mesh(new THREE.PlaneGeometry(14.8, 5.8), mats.water);
+            water.rotation.x = -Math.PI/2; water.position.y = 5.5;
+            g.add(water);
+
+            const pipe = new THREE.Mesh(new THREE.BoxGeometry(14, 0.2, 0.2), mats.mech);
+            pipe.position.set(0, 0.5, 0);
+            g.add(pipe);
+
+            // Dynamic Bubbles
+            const bubbles = new THREE.Group();
+            bubbles.name = "BubbleSystem";
+            const bGeo = new THREE.SphereGeometry(0.05, 8, 8);
+            const bMat = new THREE.MeshBasicMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.6, clippingPlanes });
+            
+            for(let i=0; i<100; i++) {
+                const b = new THREE.Mesh(bGeo, bMat);
+                b.position.set((Math.random()-0.5)*14, Math.random()*5, (Math.random()-0.5)*5);
+                b.userData.speed = Math.random() * 0.05 + 0.02;
+                b.userData.initY = b.position.y;
+                bubbles.add(b);
+            }
+            g.add(bubbles);
+
+            createWalkway(15.2, 2, 6.2, 0, 3.5, g);
+            return g;
+        }
+
+        // --- 3. Clarifier ---
+        function createClarifier(x, y, z) {
+            const g = new THREE.Group();
+            g.name = "Primary Clarifier";
+            g.position.set(x, y, z);
+            const r = 8; const h = 6;
+
+            const tank = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 64), mats.concrete);
+            tank.position.y = h/2; tank.castShadow = true;
+            g.add(tank);
+            g.userData.mesh = tank;
+            g.userData.width = r*2;
+
+            const water = new THREE.Mesh(new THREE.CircleGeometry(r-0.2, 64), mats.water);
+            water.rotation.x = -Math.PI/2; water.position.y = h-0.2;
+            g.add(water);
+
+            // Dynamic Scraper
+            const scraperGroup = new THREE.Group();
+            scraperGroup.name = "ScraperGroup";
+            
+            const centerCol = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, h+1, 16), mats.mech);
+            centerCol.position.y = h/2;
+            scraperGroup.add(centerCol);
+
+            const arm = new THREE.Mesh(new THREE.BoxGeometry(r*2-1, 0.4, 0.4), mats.mech);
+            arm.position.y = h + 0.5;
+            scraperGroup.add(arm);
+
+            const blade = new THREE.Mesh(new THREE.BoxGeometry(r*2-1, 1, 0.1), mats.mech);
+            blade.position.y = 0.5;
+            scraperGroup.add(blade);
+            
+            g.add(scraperGroup);
+
+            const bridge = new THREE.Mesh(new THREE.BoxGeometry(r+2, 0.2, 2), mats.metal);
+            bridge.position.set(r/2, h+1, 0);
+            g.add(bridge);
+
+            return g;
+        }
+
+        // --- 4. Flotation (DAF) ---
+        function createDAF(x, y, z) {
+            const g = new THREE.Group();
+            g.name = "Flotation Unit (DAF)";
+            g.position.set(x, y, z);
+
+            const tank = new THREE.Mesh(new THREE.BoxGeometry(15, 6, 8), mats.concrete);
+            tank.position.y = 3; tank.castShadow = true;
+            g.add(tank);
+            g.userData.mesh = tank;
+            g.userData.width = 15;
+
+            const water = new THREE.Mesh(new THREE.PlaneGeometry(14.8, 7.8), mats.water);
+            water.rotation.x = -Math.PI/2; water.position.y = 5.5;
+            g.add(water);
+
+            const scum = new THREE.Mesh(new THREE.PlaneGeometry(14.8, 7.8), mats.sludge);
+            scum.rotation.x = -Math.PI/2; scum.position.y = 5.6;
+            g.add(scum);
+
+            // Dynamic Skimmer
+            const skimmer = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 8), mats.mech);
+            skimmer.position.set(-6, 5.8, 0);
+            skimmer.name = "Skimmer";
+            g.add(skimmer);
+
+            // Dynamic Bubbles (Micro bubbles)
+            const bubbles = new THREE.Group();
+            bubbles.name = "MicroBubbles";
+            const bGeo = new THREE.SphereGeometry(0.03, 6, 6); // Smaller geo base
+            const bMat = new THREE.MeshBasicMaterial({color: 0xffffff, transparent:true, opacity:0.4, clippingPlanes});
+            
+            for(let i=0; i<150; i++){
+                const b = new THREE.Mesh(bGeo, bMat);
+                b.position.set((Math.random()-0.5)*14, 1, (Math.random()-0.5)*7);
+                b.userData.speed = 0.05 + Math.random()*0.05;
+                bubbles.add(b);
+            }
+            g.add(bubbles);
+
+            createWalkway(15.2, 2, 6.2, 0, -4.5, g);
+            return g;
+        }
+
+        // --- Grid Floor ---
+        const gridHelper = new THREE.GridHelper(300, 60, 0x1e3a8a, 0x0f172a);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
+
+        // --- Instantiate Units ---
+        const units = [];
+        let xOff = 10;
+        const spacing = 20;
+
+        units.push(createScreening(xOff, 0, 0));
+        xOff += units[0].userData.width + spacing;
+
+        units.push(createGrit(xOff, 0, 0));
+        xOff += units[1].userData.width + spacing;
+
+        units.push(createClarifier(xOff, 0, 0));
+        xOff += units[2].userData.width + spacing;
+
+        units.push(createDAF(xOff, 0, 0));
+
+        // Connectors & Labels
+        units.forEach((u, i) => {
+            scene.add(u);
+            createLabel(u.name, i+1, u.position);
+            
+            // Pipe connection
+            if(i < units.length - 1) {
+                const nextU = units[i+1];
+                const startX = u.position.x + u.userData.width/2;
+                const endX = nextU.position.x - nextU.userData.width/2;
+                const pipeLen = endX - startX;
+                
+                const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, pipeLen, 16), mats.metal);
+                pipe.rotation.z = -Math.PI/2;
+                pipe.position.set(startX + pipeLen/2, 2, 0);
+                scene.add(pipe);
+
+                // CSS Flow Arrow
+                const adiv = document.createElement('div');
+                adiv.className = 'flow-arrow'; adiv.innerHTML = '→';
+                const arrow = new CSS2DObject(adiv);
+                arrow.position.set(startX + pipeLen/2, 3.5, 0);
+                scene.add(arrow);
+            }
+        });
+
+        // --- UI & SIMULATION LOGIC ---
+
+        const panelContent = document.getElementById('panel-content');
+        
+        // Configuration mapping: Maps Unit Name to Parameters
+        const configs = {
+            'Screening Chamber': {
+                title: 'Screening',
+                desc: 'Optimize bar screen angle and flow.',
+                params: [
+                    { id: 'angle', label: 'Screen Angle', unit: '°', min: 0, max: 45, step: 1, key: 'screening' },
+                    { id: 'flow', label: 'Input Flow', unit: 'm³/h', min: 10, max: 100, step: 5, key: 'screening' }
+                ],
+                chartLabel: 'Screening Efficiency (%)'
+            },
+            'Grit Removal': {
+                title: 'Grit Chamber',
+                desc: 'Control aeration for grit settling.',
+                params: [
+                    { id: 'airFlow', label: 'Aeration Flow', unit: 'CFM', min: 20, max: 100, step: 5, key: 'grit' },
+                    { id: 'velocity', label: 'Flow Velocity', unit: 'm/s', min: 0.1, max: 0.5, step: 0.05, key: 'grit' }
+                ],
+                chartLabel: 'Grit Removal Rate (%)'
+            },
+            'Primary Clarifier': {
+                title: 'Clarifier',
+                desc: 'Adjust scraper speed and sludge depth.',
+                params: [
+                    { id: 'rpm', label: 'Scraper Speed', unit: 'RPM', min: 0.5, max: 5.0, step: 0.1, key: 'clarifier' },
+                    { id: 'sludgeDepth', label: 'Sludge Blanket', unit: 'm', min: 0.5, max: 3.0, step: 0.1, key: 'clarifier' }
+                ],
+                chartLabel: 'TSS Removal (%)'
+            },
+            'Flotation Unit (DAF)': {
+                title: 'DAF Unit',
+                desc: 'Fine tune saturation pressure and bubbles.',
+                params: [
+                    { id: 'pressure', label: 'Saturator Press.', unit: 'bar', min: 3, max: 8, step: 0.5, key: 'flotation' },
+                    { id: 'bubbleSize', label: 'Bubble Size', unit: 'μm', min: 40, max: 120, step: 5, key: 'flotation' }
+                ],
+                chartLabel: 'O&G Removal (%)'
+            }
+        };
+
+        function updatePanel(unitName) {
+            const config = configs[unitName];
+            if(!config) return;
+            
+            simState.activeStage = unitName;
+            
+            let html = `
+                <div class="panel-header">
+                    <h2 class="text-xl font-bold text-blue-400">${config.title.toUpperCase()} CONTROLS</h2>
+                    <p class="text-sm text-gray-400 mt-1">${config.desc}</p>
+                </div>
+                <div class="p-3 bg-blue-900/20 border border-blue-800 rounded mb-4">
+                    <h3 class="text-xs font-bold text-blue-300 uppercase tracking-widest mb-3">Operating Parameters</h3>
+            `;
+
+            config.params.forEach(p => {
+                const val = simState[p.key][p.id];
+                html += `
+                    <div class="control-group">
+                        <div class="control-label">
+                            <span>${p.label}</span>
+                            <span id="val-${p.id}" class="control-val">${val} ${p.unit}</span>
+                        </div>
+                        <input type="range" id="input-${p.id}" min="${p.min}" max="${p.max}" step="${p.step}" value="${val}">
+                    </div>
+                `;
+            });
+
+            html += `
+                </div>
+                <button id="btn-reset" class="btn-action btn-gray text-xs">Reset to Defaults</button>
+                <div class="chart-container">
+                    <canvas id="processChart"></canvas>
+                </div>
+            `;
+
+            panelContent.innerHTML = html;
+
+            // Bind Listeners
+            config.params.forEach(p => {
+                document.getElementById(`input-${p.id}`).addEventListener('input', (e) => {
+                    const newVal = parseFloat(e.target.value);
+                    document.getElementById(`val-${p.id}`).innerText = `${newVal} ${p.unit}`;
+                    simState[p.key][p.id] = newVal;
+                    
+                    update3DVisuals(unitName, p.id, newVal);
+                    updateChart(config);
+                });
+            });
+
+            document.getElementById('btn-reset').addEventListener('click', () => {
+                // Simplified reset
+                updatePanel(unitName); 
+            });
+
+            initChart(config);
+        }
+
+        function update3DVisuals(unitName, paramId, value) {
+            const unit = units.find(u => u.name === unitName);
+            if(!unit) return;
+
+            // 1. Screening Rotation
+            if(unitName === 'Screening Chamber' && paramId === 'angle') {
+                const grp = unit.getObjectByName('BarScreenGroup');
+                if(grp) grp.rotation.z = THREE.MathUtils.degToRad(value);
+            }
+
+            // 2. DAF Bubble Size
+            if(unitName === 'Flotation Unit (DAF)' && paramId === 'bubbleSize') {
+                const bubbles = unit.getObjectByName('MicroBubbles');
+                if(bubbles) {
+                    // Base size is around 75. Scale accordingly.
+                    const scale = value / 75.0; 
+                    bubbles.children.forEach(b => b.scale.setScalar(scale));
+                }
+            }
+            
+            // Clarifier RPM and Grit Airflow are handled in the Animation Loop based on state
+        }
+
+        // --- Chart.js Logic ---
+        function initChart(config) {
+            const ctx = document.getElementById('processChart').getContext('2d');
+            currentChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['T-30', 'T-20', 'T-10', 'Now'],
+                    datasets: [{
+                        label: config.chartLabel,
+                        data: [75, 78, 76, 80],
+                        borderColor: '#60a5fa',
+                        backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 2,
+                        pointRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { labels: { color: '#9ca3af', font: {size:10} } } },
+                    scales: {
+                        y: { 
+                            ticks: { color: '#6b7280', font:{size:10} }, 
+                            grid: { color: '#374151' },
+                            beginAtZero: false,
+                            suggestedMin: 50, suggestedMax: 100
+                        },
+                        x: { ticks: { color: '#6b7280', font:{size:10} }, grid: { display: false } }
+                    }
+                }
+            });
+            updateChart(config);
+        }
+
+        function updateChart(config) {
+            if(!currentChart) return;
+            
+            // Pseudo-math for simulation feedback
+            let efficiency = 80;
+            
+            if(simState.activeStage === 'Screening Chamber') {
+                // Angle 15-30 is ideal. 
+                const dev = Math.abs(simState.screening.angle - 25);
+                efficiency = 95 - dev;
+            } else if (simState.activeStage === 'Primary Clarifier') {
+                // RPM 2.0 is ideal
+                const dev = Math.abs(simState.clarifier.rpm - 2.0);
+                efficiency = 90 - (dev * 10);
+            }
+            // ... Add logic for others
+
+            const data = currentChart.data.datasets[0].data;
+            data.shift(); // Remove old
+            // Add new value with slight noise
+            data.push(efficiency + (Math.random() * 4 - 2)); 
+            currentChart.update();
+        }
+
+        // --- Interaction: Raycasting ---
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        // Target mesh arrays for raycasting (concrete tanks)
+        const targetMeshes = units.map(u => u.userData.mesh);
+
+        renderer.domElement.addEventListener('click', (event) => {
+            if(event.target.closest('#control-panel')) return;
+
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = - ((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(pointer, camera);
+            const intersects = raycaster.intersectObjects(targetMeshes);
+
+            if (intersects.length > 0) {
+                const clickedMesh = intersects[0].object;
+                const clickedUnit = clickedMesh.parent;
+
+                // 1. Activate Panel
+                if (activeUnit !== clickedUnit) {
+                    activeUnit = clickedUnit;
+                    updatePanel(activeUnit.name);
+                    
+                    // 2. Activate Clipping
+                    const bbox = new THREE.Box3().setFromObject(clickedMesh);
+                    const center = bbox.getCenter(new THREE.Vector3());
+                    
+                    // Zoom In
+                    const offset = new THREE.Vector3(15, 15, 15);
+                    const endPos = center.clone().add(offset);
+                    
+                    // Animate camera (simplified for this snippet)
+                    controls.target.copy(center);
+                    camera.position.copy(endPos);
+
+                    // Set Plane: Cut slightly into the tank
+                    localPlane.normal.set(1, 0, 0);
+                    localPlane.constant = - (bbox.min.x + 1.0);
+                    
+                } else {
+                    // Clicked same unit? Maybe toggle off or do nothing
+                }
+            } else {
+                // Clicked Empty Space -> Reset
+                activeUnit = null;
+                localPlane.constant = 2000; // Hide plane
+                controls.target.set(50, 5, 0);
+                
+                // Reset Panel UI
+                panelContent.innerHTML = `
+                    <div class="panel-header">
+                        <h2 class="text-xl font-bold text-blue-400">PLANT SCADA OVERVIEW</h2>
+                        <p class="text-sm text-gray-400 mt-1">Interactive Digital Twin V5.0</p>
+                    </div>
+                    <div class="p-4 bg-gray-800 rounded border border-gray-700 text-center text-gray-400">
+                        Select a unit to view details.
+                    </div>
+                `;
+            }
+        });
+
+        // --- Animation Loop ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+            
+            controls.update();
+
+            // 1. Grit Bubbles
+            const grit = units[1].getObjectByName('BubbleSystem');
+            if(grit) {
+                // Speed depends on airFlow param
+                const speedMult = simState.grit.airFlow / 50.0;
+                grit.children.forEach(b => {
+                    b.position.y += b.userData.speed * speedMult;
+                    if(b.position.y > 6) b.position.y = b.userData.initY;
+                });
+            }
+
+            // 2. Clarifier Scraper
+            const clarifier = units[2].getObjectByName('ScraperGroup');
+            if(clarifier) {
+                // Rotation depends on RPM param
+                clarifier.rotation.y -= simState.clarifier.rpm * 0.005;
+            }
+
+            // 3. DAF Skimmer & Bubbles
+            const daf = units[3];
+            const skimmer = daf.getObjectByName('Skimmer');
+            if(skimmer) {
+                skimmer.position.x = -6 + (Math.sin(time * 0.5) + 1) * 3;
+            }
+            const dafBubbles = daf.getObjectByName('MicroBubbles');
+            if(dafBubbles) {
+                dafBubbles.children.forEach(b => {
+                    b.position.y += 0.02; // Slow rise
+                    if(b.position.y > 6) b.position.y = 0;
+                });
+            }
+
+            composer.render();
+            labelRenderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
