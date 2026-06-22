@@ -1,0 +1,118 @@
+/* design-system.css */
+/* Root variables */
+:root {
+  --bg-primary: #050B18;
+  --color-neon-cyan: #00f7ff;
+  --color-neon-aqua: #7fffd4;
+  --color-neon-green: #00ff7f;
+  --glass-bg: rgba(13,20,38,0.45);
+  --glass-border: rgba(0,242,255,0.2);
+  --font-primary: 'Inter', sans-serif;
+  --font-secondary: 'Rajdhani', sans-serif;
+}
+
+/* Global styles */
+body {
+  margin: 0;
+  font-family: var(--font-primary);
+  background-color: var(--bg-primary);
+  color: #e0e0e0;
+  overflow-x: hidden;
+}
+
+/* Glassmorphism card */
+.glass-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 20px;
+  box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.glass-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 8px 40px rgba(0,242,255,0.3);
+}
+
+/* Hero carousel container */
+#hero-carousel {
+  width: 70%;
+  margin: 60px auto;
+  position: relative;
+}
+
+/* Stage node */
+.node {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: var(--color-neon-cyan);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  font-weight: 700;
+  text-align: center;
+  position: relative;
+  cursor: pointer;
+  box-shadow: 0 0 15px var(--color-neon-cyan), 0 0 30px var(--color-neon-cyan);
+  transition: transform 0.2s ease;
+}
+.node:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 25px var(--color-neon-aqua), 0 0 50px var(--color-neon-aqua);
+}
+
+/* Stats panel */
+.stats-panel {
+  position: absolute;
+  top: 130%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 10px 15px;
+  font-size: 0.85rem;
+  display: none;
+  min-width: 180px;
+  color: #fff;
+}
+.node:hover .stats-panel {
+  display: block;
+}
+
+/* Side stats */
+.side-stats {
+  position: fixed;
+  top: 30%;
+  font-family: var(--font-secondary);
+  color: var(--color-neon-aqua);
+  font-size: 1.2rem;
+}
+#side-left { left: 20px; }
+#side-right { right: 20px; }
+
+/* Bottom pipeline */
+#bottom-pipeline {
+  width: 100%;
+  padding: 40px 0;
+  text-align: center;
+  position: relative;
+}
+#pipeline-svg {
+  width: 90%;
+  height: 120px;
+}
+
+/* Animation keyframes */
+@keyframes glowPulse {
+  0% { box-shadow: 0 0 10px var(--color-neon-cyan); }
+  50% { box-shadow: 0 0 25px var(--color-neon-aqua); }
+  100% { box-shadow: 0 0 10px var(--color-neon-cyan); }
+}
+
+/* Background canvas placeholder – will be populated by JS */
+#bg-canvas { position: fixed; inset: 0; z-index: -1; }
