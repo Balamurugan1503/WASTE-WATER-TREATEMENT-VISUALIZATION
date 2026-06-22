@@ -97,6 +97,281 @@ Tertiary Treatment
 UV Disinfection
    ↓ 
 Effluent
+. Screening
+
+Purpose: Remove large floating solids from incoming wastewater.
+
+Removes
+Plastic waste
+Cloth
+Wood pieces
+Leaves
+Large debris
+Working Principle
+
+Wastewater passes through metal bars or screens that trap large materials while allowing water to flow through.
+
+Importance
+
+Prevents damage to pumps and downstream equipment.
+
+2. Grit Chamber
+
+Purpose: Remove heavy inorganic particles.
+
+Removes
+Sand
+Gravel
+Egg shells
+Small stones
+Working Principle
+
+Flow velocity is reduced so heavier particles settle to the bottom while lighter organic matter continues flowing.
+
+Importance
+
+Protects pumps and prevents abrasion in pipelines.
+
+3. Primary Sedimentation
+
+Purpose: Separate suspended solids by gravity.
+
+Removes
+Settleable solids
+Organic sludge
+Floating scum
+Working Principle
+
+Wastewater remains in a settling tank for several hours.
+
+Heavy solids settle:
+
+Primary Sludge ↓
+
+Lighter materials float:
+
+Scum ↑
+Efficiency
+TSS Removal: 50–70%
+BOD Removal: 25–40%
+4. Dissolved Air Flotation (DAF)
+
+Purpose: Remove oils, grease and suspended particles.
+
+Working Principle
+
+Tiny air bubbles are introduced:
+
+Particle + Bubble
+        ↓
+Floats to surface
+        ↓
+Skimmer removes sludge
+Removes
+Oil
+Grease
+Fats
+Fine solids
+5. Secondary Treatment
+
+Purpose: Remove dissolved organic pollutants biologically.
+
+Working Principle
+
+Microorganisms consume organic matter.
+
+Organic Waste
+      +
+Bacteria
+      ↓
+CO₂ + Water + Biomass
+Major Processes
+Activated Sludge
+Aeration Basin
+Biological Oxidation
+Efficiency
+BOD Removal > 90%
+COD Removal > 85%
+6. Biofilter
+
+Purpose: Biological treatment using attached microorganisms.
+
+Working Principle
+
+Wastewater flows through:
+
+Media Surface
+      ↓
+Biofilm Growth
+      ↓
+Organic Matter Degradation
+
+Microorganisms attached to the media remove pollutants.
+
+Advantages
+Low energy consumption
+High treatment efficiency
+Compact design
+7. Nutrient Removal
+
+Purpose: Remove Nitrogen and Phosphorus.
+
+Nitrogen Removal
+NH₄+
+ ↓ Nitrification
+NO₃-
+ ↓ Denitrification
+N₂ Gas
+Phosphorus Removal
+
+Phosphorus is removed by:
+
+Chemical precipitation
+Biological phosphorus removal
+Importance
+
+Prevents:
+
+Algal blooms
+Eutrophication
+Oxygen depletion
+8. Membrane Filtration
+
+Purpose: Produce very high-quality treated water.
+
+Working Principle
+
+Water passes through microscopic membranes.
+
+Wastewater
+    ↓
+Membrane
+    ↓
+Clean Water
+Removes
+Bacteria
+Viruses
+Suspended solids
+Colloidal particles
+Types
+Microfiltration
+Ultrafiltration
+Nanofiltration
+Reverse Osmosis
+9. Tertiary Treatment
+
+Purpose: Final polishing of treated water.
+
+Removes
+Residual suspended solids
+Color
+Odor
+Trace contaminants
+Methods
+Sand filtration
+Activated carbon
+Chemical treatment
+Outcome
+
+High-quality reusable water.
+
+10. UV Disinfection
+
+Purpose: Destroy harmful microorganisms.
+
+Working Principle
+
+UV lamps emit radiation:
+
+UV Light
+    ↓
+Damages DNA
+    ↓
+Microorganisms cannot reproduce
+Removes
+Bacteria
+Viruses
+Protozoa
+Advantages
+Chemical-free
+No harmful byproducts
+Environmentally friendly
+11. Advanced Oxidation Process (AOP)
+
+Purpose: Remove difficult pollutants.
+
+Working Principle
+
+Hydroxyl radicals are generated:
+
+H₂O₂ + UV
+      ↓
+OH•
+      ↓
+Destroy Micropollutants
+Removes
+Pharmaceuticals
+Pesticides
+Industrial chemicals
+Persistent organic pollutants
+12. Anaerobic Digestion
+
+Purpose: Treat sludge and generate energy.
+
+Process
+Sludge
+   ↓
+Anaerobic Bacteria
+   ↓
+Biogas + Stabilized Sludge
+Outputs
+Methane gas
+Biosolids
+Renewable energy
+13. Dewatering
+
+Purpose: Reduce water content in sludge.
+
+Equipment
+Belt Press
+Screw Press
+Centrifuge
+Result
+Wet Sludge
+     ↓
+Dewatering
+     ↓
+Dry Biosolids
+
+Reduces disposal cost and transportation volume.
+
+Final WWTP Flow
+Influent
+ ↓
+Screening
+ ↓
+Grit Chamber
+ ↓
+Primary Sedimentation
+ ↓
+DAF Flotation
+ ↓
+Secondary Treatment
+ ↓
+Biofilter
+ ↓
+Nutrient Removal
+ ↓
+Membrane Filtration
+ ↓
+Tertiary Treatment
+ ↓
+UV Disinfection
+ ↓
+Effluent (Clean Water)
+
+This sequence matches the structure of your WWTP Digital Twin Portal and provides concise engineering explanations suitable for your GitHub README, project cards, or simulation popups.
+
 
 Applications
 
